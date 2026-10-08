@@ -6,6 +6,10 @@ const SAMPLE = `event_no,event_name,heat_no,lane,swimmer_name,club,seed_time
 1,Girls 11-12 50m Freestyle,1,3,Swimmer Name,Vortex Aquatics,0:34.20
 1,Girls 11-12 50m Freestyle,1,4,Swimmer Name,Al Sadd SC,0:33.10`
 
+function titleCase(t) {
+  return t.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase())
+}
+
 export default function Setup({ data }) {
   const { meet, events, order } = data
   const [msg, setMsg] = useState(null)
@@ -57,46 +61,118 @@ export default function Setup({ data }) {
     data.reload()
   }
 
-  // CSV import
+  // Heat sheet import (HY-TEK PDF or CSV)
   const [csv, setCsv] = useState('')
+  const [pdfResult, setPdfResult] = useState(null)
+  const [replace, setReplace] = useState(true)
+  const [useTitle, setUseTitle] = useState(true)
+  const [reading, setReading] = useState(false)
+
+  async function importRows(rows, { replaceAll = false } = {}) {
+    const n = (v) => parseInt(v, 10)
+    if (replaceAll && events.length) {
+      const { error } = await supabase.from('vc_events').delete().eq('meet_id', meet.id)
+      if (error) throw error
+    }
+    const evMap = new Map()
+    rows.forEach((r) => { if (!evMap.has(n(r[0]))) evMap.set(n(r[0]), r[1] || `Event ${n(r[0])}`) })
+    const { data: evRows, error: e1 } = await supabase.from('vc_events')
+      .upsert([...evMap].map(([no, name]) => ({ meet_id: meet.id, event_no: no, name })), { onConflict: 'meet_id,event_no' }).select()
+    if (e1) throw e1
+    const evId = new Map(evRows.map((x) => [x.event_no, x.id]))
+    const heatKeys = new Map()
+    rows.forEach((r) => heatKeys.set(`${n(r[0])}-${n(r[2])}`, { event_id: evId.get(n(r[0])), heat_no: n(r[2]) }))
+    const heatList = [...heatKeys.values()]
+    const hId = new Map()
+    for (let i = 0; i < heatList.length; i += 400) {
+      const { data: hRows, error: e2 } = await supabase.from('vc_heats').upsert(heatList.slice(i, i + 400), { onConflict: 'event_id,heat_no' }).select('id,event_id,heat_no')
+      if (e2) throw e2
+      hRows.forEach((h) => hId.set(`${h.event_id}-${h.heat_no}`, h.id))
+    }
+    const entries = new Map()
+    rows.forEach((r) => {
+      const heat_id = hId.get(`${evId.get(n(r[0]))}-${n(r[2])}`)
+      entries.set(`${heat_id}-${n(r[3])}`, { heat_id, lane: n(r[3]), swimmer_name: String(r[4]).slice(0, 200), club: r[5] ? String(r[5]).slice(0, 300) : null, seed_time: r[6] || null })
+    })
+    const list = [...entries.values()]
+    for (let i = 0; i < list.length; i += 500) {
+      const { error: e3 } = await supabase.from('vc_entries').upsert(list.slice(i, i + 500), { onConflict: 'heat_id,lane' })
+      if (e3) throw e3
+    }
+    return { entries: list.length, heats: heatList.length, events: evMap.size }
+  }
+
   async function importCsv() {
     let rows = parseCsv(csv)
     if (rows.length && isNaN(parseInt(rows[0][0], 10))) rows = rows.slice(1)
-    rows = rows.filter((r) => r.length >= 5 && parseInt(r[0], 10) && parseInt(r[2], 10) && parseInt(r[3], 10) && r[4])
+    rows = rows.filter((r) => r.length >= 5 && parseInt(r[0], 10) && parseInt(r[2], 10) && !isNaN(parseInt(r[3], 10)) && r[4])
     if (!rows.length) return say('error', 'No valid rows found. Use: event_no, event_name, heat_no, lane, swimmer_name, club, seed_time')
     setBusy(true)
     try {
-      const evMap = new Map()
-      rows.forEach((r) => { const n = parseInt(r[0], 10); if (!evMap.has(n)) evMap.set(n, r[1] || `Event ${n}`) })
-      const { data: evRows, error: e1 } = await supabase.from('vc_events')
-        .upsert([...evMap].map(([n, name]) => ({ meet_id: meet.id, event_no: n, name })), { onConflict: 'meet_id,event_no' }).select()
-      if (e1) throw e1
-      const evId = new Map(evRows.map((x) => [x.event_no, x.id]))
-      const heatKeys = new Map()
-      rows.forEach((r) => { const k = `${parseInt(r[0], 10)}-${parseInt(r[2], 10)}`; heatKeys.set(k, { event_id: evId.get(parseInt(r[0], 10)), heat_no: parseInt(r[2], 10) }) })
-      const { data: hRows, error: e2 } = await supabase.from('vc_heats').upsert([...heatKeys.values()], { onConflict: 'event_id,heat_no' }).select()
-      if (e2) throw e2
-      const hId = new Map(hRows.map((h) => [`${h.event_id}-${h.heat_no}`, h.id]))
-      const entries = new Map()
-      rows.forEach((r) => {
-        const heat_id = hId.get(`${evId.get(parseInt(r[0], 10))}-${parseInt(r[2], 10)}`)
-        const lane = parseInt(r[3], 10)
-        entries.set(`${heat_id}-${lane}`, { heat_id, lane, swimmer_name: r[4], club: r[5] || null, seed_time: r[6] || null })
-      })
-      const { error: e3 } = await supabase.from('vc_entries').upsert([...entries.values()], { onConflict: 'heat_id,lane' })
-      if (e3) throw e3
-      say('ok', `Imported ${entries.size} entries across ${heatKeys.size} heats and ${evMap.size} events.`)
+      const r = await importRows(rows)
+      say('ok', `Imported ${r.entries} entries across ${r.heats} heats and ${r.events} events.`)
       setCsv('')
-    } catch (err) {
-      say('error', err.message)
-    }
+    } catch (err) { say('error', err.message) }
     setBusy(false)
     data.reload()
   }
-  function onFile(e) {
+
+  async function onFile(e) {
     const f = e.target.files?.[0]
+    e.target.value = ''
     if (!f) return
-    f.text().then(setCsv)
+    setPdfResult(null)
+    if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
+      setReading(true); setMsg(null)
+      try {
+        const { readHeatSheetPdf } = await import('./heatsheet.js')
+        const res = await readHeatSheetPdf(f)
+        if (!res.rows.length) say('error', 'No heats found in this PDF. It should be a HY-TEK Meet Manager meet program / heat sheet.')
+        else setPdfResult({ ...res, fileName: f.name })
+      } catch (err) {
+        say('error', `Could not read the PDF: ${err.message}`)
+      }
+      setReading(false)
+    } else {
+      f.text().then(setCsv)
+    }
+  }
+
+  async function importPdf() {
+    if (!pdfResult) return
+    if (replace && events.length && !window.confirm(`Replace all ${events.length} current events (and their call-room progress) with the ${pdfResult.events} events from ${pdfResult.fileName}?`)) return
+    setBusy(true)
+    try {
+      const r = await importRows(pdfResult.rows, { replaceAll: replace })
+      const lanes = pdfResult.rows.map((x) => x[3])
+      const patch = { lanes: Math.min(10, Math.max(4, Math.max(...lanes) - Math.min(...lanes) + 1)) }
+      if (useTitle && pdfResult.title) { patch.name = titleCase(pdfResult.title); if (pdfResult.dates) patch.meet_date = pdfResult.dates }
+      if (pdfResult.sponsor && pdfResult.useSponsor !== false) patch.sponsor_banner = pdfResult.sponsor
+      await supabase.from('vc_meet').update(patch).eq('id', meet.id)
+      say('ok', `Imported ${r.entries} entries across ${r.heats} heats and ${r.events} events${patch.sponsor_banner ? ', plus the sponsor banner' : ''}.`)
+      setPdfResult(null)
+    } catch (err) { say('error', err.message) }
+    setBusy(false)
+    data.reload()
+  }
+
+  // Sponsor banner
+  async function onSponsorFile(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    try {
+      const { imageFileToDataUrl } = await import('./heatsheet.js')
+      const url = await imageFileToDataUrl(f)
+      const { error } = await supabase.from('vc_meet').update({ sponsor_banner: url }).eq('id', meet.id)
+      if (error) say('error', error.message); else say('ok', 'Sponsor banner updated.')
+    } catch (err) { say('error', `Could not read the image: ${err.message}`) }
+    data.reload()
+  }
+  async function removeSponsor() {
+    if (!window.confirm('Remove the sponsor banner?')) return
+    await supabase.from('vc_meet').update({ sponsor_banner: null }).eq('id', meet.id)
+    data.reload()
   }
 
   async function loadDemo() {
@@ -186,15 +262,72 @@ export default function Setup({ data }) {
 
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-              <h2 style={{ fontSize: 18 }}>Import heat sheet (CSV)</h2>
+              <h2 style={{ fontSize: 18 }}>Import heat sheet</h2>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <label className="btn sm" style={{ cursor: 'pointer' }}>Choose CSV file<input type="file" accept=".csv,text/csv,text/plain" onChange={onFile} style={{ display: 'none' }} /></label>
+                <label className="btn sm primary" style={{ cursor: 'pointer' }}>
+                  {reading ? 'Reading PDF…' : 'Upload PDF or CSV'}
+                  <input type="file" accept=".pdf,application/pdf,.csv,text/csv,text/plain" onChange={onFile} disabled={reading} style={{ display: 'none' }} />
+                </label>
                 {!events.length && <button type="button" className="btn sm" onClick={loadDemo}>Load demo heats</button>}
               </div>
             </div>
-            <p className="small muted" style={{ margin: 0 }}>One row per swimmer: <b>event_no, event_name, heat_no, lane, swimmer_name, club, seed_time</b>. Export from Meet Manager / Excel, or paste below. Re-importing updates existing lanes.</p>
-            <textarea className="input" aria-label="CSV rows" placeholder={SAMPLE} value={csv} onChange={(e) => setCsv(e.target.value)} />
-            <button className="btn primary" style={{ alignSelf: 'flex-start' }} disabled={busy || !csv.trim()} onClick={importCsv}>{busy ? 'Importing…' : 'Import'}</button>
+            <p className="small muted" style={{ margin: 0 }}>
+              <b>PDF:</b> the HY-TEK Meet Manager meet program / heat sheet — events, heats, lanes, swimmers, clubs, seed times and relays are read automatically, and the sponsor logos at the bottom of the page become the sponsor banner.{' '}
+              <b>CSV:</b> one row per swimmer: event_no, event_name, heat_no, lane, swimmer_name, club, seed_time.
+            </p>
+
+            {pdfResult && (
+              <div style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, background: 'var(--soft-2)' }}>
+                <div className="eyebrow blue">Ready to import · {pdfResult.fileName}</div>
+                {pdfResult.title && <div style={{ fontWeight: 800, fontSize: 17 }}>{titleCase(pdfResult.title)}{pdfResult.dates ? <span className="muted" style={{ fontWeight: 500 }}> · {pdfResult.dates}</span> : null}</div>}
+                <div className="grid-kpi" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+                  <div className="card" style={{ padding: 12 }}><div className="eyebrow">Events</div><div className="kpi">{pdfResult.events}</div></div>
+                  <div className="card" style={{ padding: 12 }}><div className="eyebrow">Heats</div><div className="kpi">{pdfResult.heats}</div></div>
+                  <div className="card" style={{ padding: 12 }}><div className="eyebrow">Entries</div><div className="kpi">{pdfResult.rows.length}</div></div>
+                </div>
+                {pdfResult.unmatched.length > 0 && (
+                  <div className="notice">{pdfResult.unmatched.length} line(s) could not be read and will be skipped, e.g. “{pdfResult.unmatched[0]}”.</div>
+                )}
+                {pdfResult.sponsor ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div className="label">Sponsor banner found</div>
+                    <img src={pdfResult.sponsor} alt="Sponsor logos from the PDF" style={{ maxWidth: '100%', maxHeight: 90, objectFit: 'contain', alignSelf: 'flex-start', background: '#fff', borderRadius: 8, border: '1px solid var(--line)' }} />
+                    <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input type="checkbox" checked={pdfResult.useSponsor !== false} onChange={(e) => setPdfResult({ ...pdfResult, useSponsor: e.target.checked })} /> Use these logos as the sponsor banner
+                    </label>
+                  </div>
+                ) : <div className="small muted">No sponsor logos found at the bottom of page 1.</div>}
+                <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="checkbox" checked={useTitle} onChange={(e) => setUseTitle(e.target.checked)} /> Update the meet name and dates from the PDF
+                </label>
+                {events.length > 0 && (
+                  <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} /> Replace the {events.length} events already in the meet (recommended for a new heat sheet)
+                  </label>
+                )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="btn primary" disabled={busy} onClick={importPdf}>{busy ? 'Importing…' : `Import ${pdfResult.rows.length} entries`}</button>
+                  <button className="btn" disabled={busy} onClick={() => setPdfResult(null)}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            <textarea className="input" aria-label="CSV rows" placeholder={SAMPLE} value={csv} onChange={(e) => setCsv(e.target.value)} style={{ minHeight: 100 }} />
+            <button className="btn" style={{ alignSelf: 'flex-start' }} disabled={busy || !csv.trim()} onClick={importCsv}>{busy ? 'Importing…' : 'Import CSV rows'}</button>
+          </div>
+
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <h2 style={{ fontSize: 18 }}>Sponsor banner</h2>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <label className="btn sm" style={{ cursor: 'pointer' }}>Upload image<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={onSponsorFile} style={{ display: 'none' }} /></label>
+                {meet.sponsor_banner && <button className="btn sm danger" onClick={removeSponsor}>Remove</button>}
+              </div>
+            </div>
+            <p className="small muted" style={{ margin: 0 }}>Shown on the staff registration form, the call room screen and the console. Comes from the heat sheet PDF automatically, or upload a logo strip.</p>
+            {meet.sponsor_banner
+              ? <img src={meet.sponsor_banner} alt="Current sponsor banner" style={{ maxWidth: '100%', maxHeight: 110, objectFit: 'contain', alignSelf: 'flex-start' }} />
+              : <div className="small muted">No sponsor banner yet.</div>}
           </div>
         </div>
       </div>

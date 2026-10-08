@@ -16,7 +16,7 @@ export default function Register() {
   const [done, setDone] = useState(null)
 
   useEffect(() => {
-    supabase.from('vc_meet').select('id,name,venue,meet_date').eq('is_active', true).order('created_at', { ascending: false }).limit(1)
+    supabase.from('vc_meet').select('id,name,venue,meet_date,sponsor_banner').eq('is_active', true).order('created_at', { ascending: false }).limit(1)
       .then(({ data }) => {
         const m = data?.[0]
         setMeet(m || null)
@@ -36,10 +36,13 @@ export default function Register() {
     if (!v.consent) e.consent = 'Please confirm to continue.'
     return e
   }
+  // Functional update so quick taps (position, then sessions) never overwrite each other.
   function set(k, val) {
-    const next = { ...f, [k]: val }
-    setF(next)
-    if (tried) setErrors(validate(next))
+    setF((prev) => {
+      const next = { ...prev, [k]: typeof val === 'function' ? val(prev[k]) : val }
+      if (tried) setErrors(validate(next))
+      return next
+    })
   }
 
   async function submit(e) {
@@ -166,7 +169,7 @@ export default function Register() {
               {SESSIONS.map((s) => {
                 const on = f.sessions.includes(s.id)
                 return (
-                  <button type="button" key={s.id} className="session" aria-pressed={on} onClick={() => set('sessions', on ? f.sessions.filter((x) => x !== s.id) : [...f.sessions, s.id])}>
+                  <button type="button" key={s.id} className="session" aria-pressed={on} onClick={() => set('sessions', (cur) => (cur.includes(s.id) ? cur.filter((x) => x !== s.id) : [...cur, s.id]))}>
                     <div style={{ fontWeight: 800, fontSize: 13.5 }}>{s.name}</div>
                     <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 500 }}>{s.time}</div>
                   </button>
@@ -185,6 +188,11 @@ export default function Register() {
           <button className="btn primary" style={{ minHeight: 54, fontSize: 16 }} disabled={busy}>{busy ? 'Sending…' : 'Submit application'}</button>
           <p className="small muted" style={{ margin: 0, textAlign: 'center' }}>Questions? <a href="mailto:aquaticmanager@vortexaquatics.com">aquaticmanager@vortexaquatics.com</a></p>
         </form>
+      )}
+      {meet?.sponsor_banner && (
+        <footer style={{ borderTop: '1px solid var(--line)', padding: '20px', display: 'flex', justifyContent: 'center' }}>
+          <img src={meet.sponsor_banner} alt="Meet sponsors" style={{ maxWidth: 'min(100%, 720px)', maxHeight: 90, objectFit: 'contain' }} />
+        </footer>
       )}
     </div>
   )

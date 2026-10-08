@@ -3,7 +3,7 @@ import { supabase } from './supabase.js'
 import { STAGES, announceText, heatCode, statusFor } from './lib.js'
 
 export default function CallRoom({ data, onGoSetup }) {
-  const { order, runIdx, entries, meet } = data
+  const { order, runIdx, entries, meet, laneStart } = data
   const [selId, setSelId] = useState(null)
 
   // Default selection: first heat after the one racing that is not yet released.
@@ -21,9 +21,9 @@ export default function CallRoom({ data, onGoSetup }) {
     const n = meet?.lanes || 8
     const byLane = new Map(entries.filter((e) => e.heat_id === sel.id).map((e) => [e.lane, e]))
     const out = []
-    for (let l = 1; l <= n; l++) out.push(byLane.get(l) || { lane: l, empty: true })
+    for (let l = laneStart; l < laneStart + n; l++) out.push(byLane.get(l) || { lane: l, empty: true })
     return out
-  }, [sel, entries, meet])
+  }, [sel, entries, meet, laneStart])
 
   if (!order.length) {
     return (

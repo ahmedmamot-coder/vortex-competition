@@ -101,6 +101,12 @@ export default function Console() {
             {tab === 'setup' && <Setup data={data} />}
           </>
         )}
+
+        {meet?.sponsor_banner && (
+          <footer style={{ borderTop: '1px solid var(--line)', paddingTop: 20, display: 'flex', justifyContent: 'center' }}>
+            <img src={meet.sponsor_banner} alt="Meet sponsors" style={{ maxWidth: '100%', maxHeight: 80, objectFit: 'contain' }} />
+          </footer>
+        )}
       </main>
     </div>
   )

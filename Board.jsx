@@ -5,7 +5,7 @@ import { useMeet } from './useMeet.js'
 // Full-screen call room display. Shows the heat most recently called (1st / 2nd / final),
 // otherwise the next heat to be called. Updates live.
 export default function Board() {
-  const { meet, order, runIdx, entries, loading } = useMeet()
+  const { meet, order, runIdx, entries, loading, laneStart } = useMeet()
 
   const shown = useMemo(() => {
     const after = order.slice(Math.max(runIdx + 1, 0))
@@ -18,8 +18,8 @@ export default function Board() {
     if (!shown) return []
     const n = meet?.lanes || 8
     const byLane = new Map(entries.filter((e) => e.heat_id === shown.id).map((e) => [e.lane, e]))
-    return Array.from({ length: n }, (_, i) => byLane.get(i + 1) || { lane: i + 1, empty: true })
-  }, [shown, entries, meet])
+    return Array.from({ length: n }, (_, i) => byLane.get(i + laneStart) || { lane: i + laneStart, empty: true })
+  }, [shown, entries, meet, laneStart])
 
   const racing = runIdx >= 0 ? order[runIdx] : null
   const shownIdx = shown ? order.findIndex((h) => h.id === shown.id) : -1
@@ -61,6 +61,8 @@ export default function Board() {
           </div>
         </>
       )}
+
+      {meet?.sponsor_banner && <img className="sponsors" src={meet.sponsor_banner} alt="Meet sponsors" style={{ maxHeight: '9vh', maxWidth: '100%', objectFit: 'contain', alignSelf: 'center' }} />}
 
       <div className="board-foot">
         <span><strong>Now racing:</strong> {racing ? `Event ${racing.event_no} · Heat ${racing.heat_no} — ${racing.event_name}` : 'Not started'}</span>

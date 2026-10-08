@@ -31,8 +31,8 @@ export function useMeet() {
       const h = await supabase.from('vc_heats').select('*').in('event_id', ids)
       hs = h.data || []
       const hids = hs.map((x) => x.id)
-      for (let i = 0; i < hids.length; i += 150) {
-        const r = await supabase.from('vc_entries').select('*').in('heat_id', hids.slice(i, i + 150))
+      for (let i = 0; i < hids.length; i += 80) {
+        const r = await supabase.from('vc_entries').select('*').in('heat_id', hids.slice(i, i + 80))
         en = en.concat(r.data || [])
       }
     }
@@ -75,8 +75,11 @@ export function useMeet() {
 
   const runIdx = useMemo(() => (meet?.running_heat_id ? order.findIndex((h) => h.id === meet.running_heat_id) : -1), [order, meet])
 
+  // HY-TEK pools are often numbered 0–9; start at 0 when any entry uses lane 0.
+  const laneStart = useMemo(() => (entries.some((e) => e.lane === 0) ? 0 : 1), [entries])
+
   return {
-    meet, events, heats, entries, positions, apps, order, runIdx, loading, error, reload: load,
+    laneStart, meet, events, heats, entries, positions, apps, order, runIdx, loading, error, reload: load,
     setHeats, setEntries, setApps, setMeet, setPositions
   }
 }
