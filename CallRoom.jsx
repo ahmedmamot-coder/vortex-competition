@@ -25,6 +25,10 @@ export default function CallRoom({ data, onGoSetup }) {
     return out
   }, [sel, entries, meet, laneStart])
 
+  const [autoTv, setAutoTv] = useState(() => { try { return localStorage.getItem('vc-auto-tv') !== '0' } catch { return true } })
+  const [custom, setCustom] = useState('')
+  const [tvNote, setTvNote] = useState('')
+
   if (!order.length) {
     return (
       <div className="card empty">
@@ -44,6 +48,22 @@ export default function CallRoom({ data, onGoSetup }) {
     const updated_at = new Date().toISOString()
     data.setHeats((hs) => hs.map((x) => (x.id === h.id ? { ...x, call_stage: s, updated_at } : x)))
     await supabase.from('vc_heats').update({ call_stage: s, updated_at }).eq('id', h.id)
+    if (autoTv && s >= 1 && s <= 3) announce(h, s)
+  }
+
+  // ---- Spectator TV voice-over ----
+  function toggleAutoTv(v) { setAutoTv(v); try { localStorage.setItem('vc-auto-tv', v ? '1' : '0') } catch { /* ignore */ } }
+  async function announce(h, s) {
+    const { error } = await supabase.from('vc_announcements').insert({ meet_id: meet.id, heat_id: h.id, stage: s })
+    setTvNote(error ? `TV announcement failed: ${error.message}` : `Announced on the spectator TV: ${['', '1st', '2nd', 'final'][s]} call, ${heatCode(h)}`)
+  }
+  async function announceCustom(e) {
+    e.preventDefault()
+    const message = custom.trim()
+    if (!message) return
+    const { error } = await supabase.from('vc_announcements').insert({ meet_id: meet.id, message: message.slice(0, 400) })
+    setTvNote(error ? `TV announcement failed: ${error.message}` : 'Custom announcement sent to the spectator TV.')
+    if (!error) setCustom('')
   }
   async function patchEntry(e, patch) {
     data.setEntries((es) => es.map((x) => (x.id === e.id ? { ...x, ...patch } : x)))
@@ -122,9 +142,25 @@ export default function CallRoom({ data, onGoSetup }) {
               <button className="btn primary" style={{ minHeight: 48 }} onClick={primary} disabled={stage === 4 && selIdx >= order.length - 1}>{btnLabel}</button>
               <button className="btn" onClick={checkAll}>Check in all present</button>
               <button className="btn" onClick={() => setStage(sel, 0)}>Reset heat</button>
+              <button className="btn" disabled={stage < 1 || stage > 3} onClick={() => announce(sel, stage)} title="Read this call out again on the spectator TV">Announce again on TV</button>
               <span style={{ marginLeft: 'auto', fontWeight: 700 }}>
                 {checked} / {active.length} checked in <span className="muted" style={{ fontWeight: 500 }}>· {scratched} scratched</span>
               </span>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span className="eyebrow blue" style={{ fontSize: 11 }}>Spectator TV</span>
+                <label className="small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="checkbox" checked={autoTv} onChange={(e) => toggleAutoTv(e.target.checked)} /> Read each call out loud on the TV automatically
+                </label>
+                <a className="small" href="/tv" target="_blank" rel="noreferrer" style={{ marginLeft: 'auto' }}>Open TV screen</a>
+              </div>
+              <form onSubmit={announceCustom} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input className="input" style={{ flex: '1 1 280px', width: 'auto', minHeight: 40 }} maxLength={400} placeholder="Custom announcement, e.g. All Event 12 swimmers to the call room (English or Arabic)" aria-label="Custom TV announcement" value={custom} onChange={(e) => setCustom(e.target.value)} />
+                <button className="btn sm dark" style={{ minHeight: 40 }} disabled={!custom.trim()}>Announce</button>
+              </form>
+              {tvNote && <div className="small muted" role="status">{tvNote}</div>}
             </div>
           </div>
 

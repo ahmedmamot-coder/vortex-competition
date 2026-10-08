@@ -81,3 +81,40 @@ export function download(name, text) {
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
+
+// ---- Spoken announcements (spectator TV voice-over) ----
+
+// "Girls 12-70 400 LC Meter IM" -> "Girls 12 and over, 400 metre individual medley"
+export function spokenEventName(name = '') {
+  return name
+    .replace(/(\d+)\s*-\s*(\d+)/g, (_, a, b) => (+b >= 60 ? `${a} and over` : `${a} to ${b}`))
+    .replace(/(\d+)\s*&\s*(Over|Under)/gi, (_, a, w) => `${a} and ${w.toLowerCase()}`)
+    .replace(/\b(LC|SC)\s+Meters?\b/gi, 'metre')
+    .replace(/\b(LC|SC)\s+Yards?\b/gi, 'yard')
+    .replace(/\bMeters?\b/gi, 'metre')
+    .replace(/(\d+)m\b/g, '$1 metre')
+    .replace(/\bIM\b/g, 'individual medley')
+    .replace(/(\d+)\s+(metre|yard)/gi, '$1 $2')
+    .replace(/(Girls|Boys|Women|Men|Mixed)\s+([\w\s]+?)\s+((\d+\s*[×x]\s*)?\d+ (metre|yard))/i, '$1 $2, $3')
+    .replace(/&/g, 'and')
+    .replace(/(\d+)\s*[×x]\s*(\d+)/g, '$1 by $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const STAGE_EN = { 1: 'First call', 2: 'Second call', 3: 'Final call' }
+const STAGE_AR = { 1: 'النداء الأول', 2: 'النداء الثاني', 3: 'النداء الأخير' }
+
+export function speechForHeat(h, stage) {
+  if (!h || !STAGE_EN[stage]) return null
+  const ev = spokenEventName(h.event_name)
+  const en = stage === 3
+    ? `${STAGE_EN[stage]}. Event ${h.event_no}, ${ev}, heat ${h.heat_no}. Swimmers, report to the call room now.`
+    : `${STAGE_EN[stage]}. Event ${h.event_no}, ${ev}, heat ${h.heat_no}. Swimmers, please go to the call room.`
+  const ar = stage === 3
+    ? `${STAGE_AR[stage]}. السباق رقم ${h.event_no}، التصفية ${h.heat_no}. على السباحين التوجه إلى غرفة النداء الآن.`
+    : `${STAGE_AR[stage]}. السباق رقم ${h.event_no}، التصفية ${h.heat_no}. يرجى من السباحين التوجه إلى غرفة النداء.`
+  return { en, ar, label: STAGE_EN[stage] }
+}
+
+export const isArabic = (t) => /[؀-ۿ]/.test(t || '')

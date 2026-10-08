@@ -59,6 +59,7 @@ export default function Console() {
               ))}
             </nav>
             <a className="btn sm" href="/board" target="_blank" rel="noreferrer">Call room screen</a>
+            <a className="btn sm dark" href="/tv" target="_blank" rel="noreferrer">Spectator TV</a>
             <button className="btn sm" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </div>
         </div>
