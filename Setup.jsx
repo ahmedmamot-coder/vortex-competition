@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../supabase.js'
-import { parseCsv } from '../lib.js'
+import { supabase } from './supabase.js'
+import { parseCsv } from './lib.js'
 
 const SAMPLE = `event_no,event_name,heat_no,lane,swimmer_name,club,seed_time
 1,Girls 11-12 50m Freestyle,1,3,Swimmer Name,Vortex Aquatics,0:34.20

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../supabase.js'
-import { BANKS, IBAN_RE, SESSIONS, cleanIban, maskIban, maskQid } from '../lib.js'
+import logoH from './logo-horizontal.svg'
+import { supabase } from './supabase.js'
+import { BANKS, IBAN_RE, SESSIONS, cleanIban, maskIban, maskQid } from './lib.js'
 
 const EMPTY = { full_name: '', qid: '', mobile: '', email: '', bank_name: '', account_holder: '', iban: '', position: '', sessions: [], consent: false }
 
@@ -84,7 +85,7 @@ export default function Register() {
     <div>
       <header style={{ borderBottom: '1px solid var(--line)' }}>
         <div className="form-page" style={{ paddingTop: 18, paddingBottom: 18 }}>
-          <img src="/logo-horizontal.svg" alt="Vortex Swimming Club" style={{ height: 44, alignSelf: 'flex-start' }} />
+          <img src={logoH} alt="Vortex Swimming Club" style={{ height: 44, alignSelf: 'flex-start' }} />
         </div>
       </header>
 

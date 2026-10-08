@@ -1,8 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import AuthGate from './components/AuthGate.jsx'
-import Console from './pages/Console.jsx'
-import Board from './pages/Board.jsx'
-import Register from './pages/Register.jsx'
+import AuthGate from './AuthGate.jsx'
+import Console from './Console.jsx'
+import Board from './Board.jsx'
+import Register from './Register.jsx'
 
 export default function App() {
   return (

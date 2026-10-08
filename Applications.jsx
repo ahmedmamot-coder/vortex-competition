@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { supabase } from '../supabase.js'
-import { SESSIONS, download, fmtIban, maskIban, maskQid, toCsv } from '../lib.js'
+import { supabase } from './supabase.js'
+import { SESSIONS, download, fmtIban, maskIban, maskQid, toCsv } from './lib.js'
 
 const FILTERS = ['all', 'pending', 'approved', 'declined']
 

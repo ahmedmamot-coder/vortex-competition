@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { supabase } from '../supabase.js'
-import { useMeet } from '../useMeet.js'
-import CallRoom from '../components/CallRoom.jsx'
-import Officials from '../components/Officials.jsx'
-import Applications from '../components/Applications.jsx'
-import Setup from '../components/Setup.jsx'
-import { heatCode } from '../lib.js'
+import logoH from './logo-horizontal.svg'
+import { supabase } from './supabase.js'
+import { useMeet } from './useMeet.js'
+import CallRoom from './CallRoom.jsx'
+import Officials from './Officials.jsx'
+import Applications from './Applications.jsx'
+import Setup from './Setup.jsx'
+import { heatCode } from './lib.js'
 
 const TABS = [
   { id: 'call', label: 'Call Room' },
@@ -42,7 +43,7 @@ export default function Console() {
       <header className="topbar">
         <div className="wrap">
           <div className="brand">
-            <img src="/logo-horizontal.svg" alt="Vortex Swimming Club" />
+            <img src={logoH} alt="Vortex Swimming Club" />
             <div className="divider" />
             <div className="meet-txt">
               <div className="meet-name">{meet?.name || 'Vortex Competition'}</div>

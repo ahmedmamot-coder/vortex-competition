@@ -1,4 +1,4 @@
-import { supabase } from '../supabase.js'
+import { supabase } from './supabase.js'
 
 export default function Officials({ data }) {
   const { positions, apps } = data

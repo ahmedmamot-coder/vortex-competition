@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '../supabase.js'
-import { STAGES, announceText, heatCode, statusFor } from '../lib.js'
+import { supabase } from './supabase.js'
+import { STAGES, announceText, heatCode, statusFor } from './lib.js'
 
 export default function CallRoom({ data, onGoSetup }) {
   const { order, runIdx, entries, meet } = data

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { useMeet } from '../useMeet.js'
+import logoH from './logo-horizontal.svg'
+import { useMeet } from './useMeet.js'
 
 // Full-screen call room display. Shows the heat most recently called (1st / 2nd / final),
 // otherwise the next heat to be called. Updates live.
@@ -30,7 +31,7 @@ export default function Board() {
   return (
     <div className="board">
       <div className="board-head">
-        <img src="/logo-horizontal.svg" alt="Vortex Swimming Club" />
+        <img src={logoH} alt="Vortex Swimming Club" />
         <div style={{ textAlign: 'right' }}>
           <div className="eyebrow" style={{ fontSize: 'clamp(14px, 1.3vw, 22px)' }}>Call room</div>
           <div className="muted" style={{ fontSize: 'clamp(13px, 1.1vw, 20px)', fontWeight: 600 }}>{meet?.name}</div>
