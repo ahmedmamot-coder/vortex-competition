@@ -167,29 +167,11 @@ export default function CallRoom({ data, onGoSetup }) {
           <div className="table">
             <table>
               <thead>
-                <tr><th style={{ width: 70 }}>Lane</th><th>Swimmer</th><th>Club</th><th>Seed</th><th>Status</th><th style={{ textAlign: 'right' }}>Action</th></tr>
+                <tr><th style={{ width: 70 }}>Lane</th><th>Swimmer</th><th>Club</th><th>Seed</th><th>Status</th><th style={{ textAlign: 'right', minWidth: 250 }}>Action</th></tr>
               </thead>
               <tbody>
-                {lanes.map((l) => l.empty ? (
-                  <tr key={`e${l.lane}`}><td><span className="lane">{l.lane}</span></td><td colSpan={5} className="muted small">Empty lane</td></tr>
-                ) : (
-                  <tr key={l.id} className={l.scratched ? 'scratched' : ''}>
-                    <td><span className="lane">{l.lane}</span></td>
-                    <td style={{ fontWeight: 700 }}>{l.swimmer_name}</td>
-                    <td className="small" style={{ color: 'var(--ink-2)' }}>{l.club}</td>
-                    <td className="num" style={{ fontWeight: 600 }}>{l.seed_time || 'NT'}</td>
-                    <td>
-                      <span className={`chip ${l.scratched ? 'grey' : l.checked_in ? 'ok' : 'warn'}`}>{l.scratched ? 'Scratched' : l.checked_in ? 'Present' : 'Not in'}</span>
-                    </td>
-                    <td>
-                      <div className="actions">
-                        <button className={`btn sm ${l.checked_in ? 'dark' : ''}`} disabled={l.scratched} onClick={() => patchEntry(l, { checked_in: !l.checked_in })}>
-                          {l.checked_in ? 'Present' : 'Check in'}
-                        </button>
-                        <button className="btn sm" onClick={() => patchEntry(l, { scratched: !l.scratched, checked_in: false })}>{l.scratched ? 'Restore' : 'Scratch'}</button>
-                      </div>
-                    </td>
-                  </tr>
+                {lanes.map((l) => (
+                  <LaneRow key={l.empty ? `e${l.lane}` : l.id} l={l} heat={sel} lanes={lanes} data={data} onToggleCheck={() => patchEntry(l, { checked_in: !l.checked_in })} onToggleScratch={() => patchEntry(l, { scratched: !l.scratched, checked_in: false })} />
                 ))}
               </tbody>
             </table>
@@ -197,6 +179,97 @@ export default function CallRoom({ data, onGoSetup }) {
         </div>
       )}
     </section>
+  )
+}
+
+// One lane of the selected heat: shows the swimmer, or lets the organizer add / edit / remove one.
+function LaneRow({ l, heat, lanes, data, onToggleCheck, onToggleScratch }) {
+  const [editing, setEditing] = useState(false)
+  const [f, setF] = useState({ swimmer_name: '', club: '', seed_time: '', lane: l.lane })
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  function start() {
+    setF({ swimmer_name: l.swimmer_name || '', club: l.club || '', seed_time: l.seed_time || '', lane: l.lane })
+    setErr(''); setEditing(true)
+  }
+  async function save(e) {
+    e.preventDefault()
+    const name = f.swimmer_name.trim()
+    if (!name) return setErr('Enter the swimmer name.')
+    const lane = parseInt(f.lane, 10)
+    const taken = lanes.find((x) => !x.empty && x.lane === lane && x.id !== l.id)
+    if (Number.isNaN(lane)) return setErr('Choose a lane.')
+    if (taken) return setErr(`Lane ${lane} already has ${taken.swimmer_name}.`)
+    setBusy(true)
+    const row = { swimmer_name: name.slice(0, 200), club: f.club.trim() || null, seed_time: f.seed_time.trim() || null, lane }
+    const { error } = l.empty
+      ? await supabase.from('vc_entries').insert({ ...row, heat_id: heat.id })
+      : await supabase.from('vc_entries').update(row).eq('id', l.id)
+    setBusy(false)
+    if (error) return setErr(error.message)
+    setEditing(false)
+    data.reload()
+  }
+  async function remove() {
+    if (!window.confirm(`Remove ${l.swimmer_name} from lane ${l.lane}?`)) return
+    const { error } = await supabase.from('vc_entries').delete().eq('id', l.id)
+    if (error) return setErr(error.message)
+    setEditing(false)
+    data.reload()
+  }
+
+  if (editing) {
+    return (
+      <tr>
+        <td><span className="lane">{l.lane}</span></td>
+        <td colSpan={5}>
+          <form onSubmit={save} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input className="input" style={{ flex: '2 1 200px', width: 'auto', minHeight: 38 }} placeholder="Swimmer name (Last, First)" aria-label="Swimmer name" value={f.swimmer_name} onChange={(e) => setF({ ...f, swimmer_name: e.target.value })} autoFocus />
+            <input className="input" style={{ flex: '1 1 110px', width: 'auto', minHeight: 38 }} placeholder="Club" aria-label="Club" value={f.club} onChange={(e) => setF({ ...f, club: e.target.value })} />
+            <input className="input num" style={{ flex: '0 1 110px', width: 'auto', minHeight: 38 }} placeholder="Seed e.g. 1:05.32" aria-label="Seed time" value={f.seed_time} onChange={(e) => setF({ ...f, seed_time: e.target.value })} />
+            {!l.empty && (
+              <select className="input" style={{ width: 'auto', minHeight: 38 }} aria-label="Lane" value={f.lane} onChange={(e) => setF({ ...f, lane: e.target.value })}>
+                {lanes.map((x) => <option key={x.lane} value={x.lane}>Lane {x.lane}</option>)}
+              </select>
+            )}
+            <button className="btn sm primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+            <button type="button" className="btn sm" onClick={() => setEditing(false)}>Cancel</button>
+            {!l.empty && <button type="button" className="btn sm danger" onClick={remove}>Remove swimmer</button>}
+            {err && <span className="err-text" style={{ flexBasis: '100%' }}>{err}</span>}
+          </form>
+        </td>
+      </tr>
+    )
+  }
+
+  if (l.empty) {
+    return (
+      <tr>
+        <td><span className="lane">{l.lane}</span></td>
+        <td colSpan={4} className="muted small">Empty lane</td>
+        <td><div className="actions"><button className="btn sm" onClick={start}>Add swimmer</button></div></td>
+      </tr>
+    )
+  }
+
+  return (
+    <tr className={l.scratched ? 'scratched' : ''}>
+      <td><span className="lane">{l.lane}</span></td>
+      <td style={{ fontWeight: 700 }}>{l.swimmer_name}</td>
+      <td className="small" style={{ color: 'var(--ink-2)' }}>{l.club}</td>
+      <td className="num" style={{ fontWeight: 600 }}>{l.seed_time || 'NT'}</td>
+      <td>
+        <span className={`chip ${l.scratched ? 'grey' : l.checked_in ? 'ok' : 'warn'}`}>{l.scratched ? 'Scratched' : l.checked_in ? 'Present' : 'Not in'}</span>
+      </td>
+      <td>
+        <div className="actions">
+          <button className={`btn sm ${l.checked_in ? 'dark' : ''}`} disabled={l.scratched} onClick={onToggleCheck}>{l.checked_in ? 'Present' : 'Check in'}</button>
+          <button className="btn sm" onClick={onToggleScratch}>{l.scratched ? 'Restore' : 'Scratch'}</button>
+          <button className="btn sm" onClick={start} aria-label={`Edit lane ${l.lane}`}>Edit</button>
+        </div>
+      </td>
+    </tr>
   )
 }
 

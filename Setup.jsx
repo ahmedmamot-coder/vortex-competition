@@ -50,7 +50,22 @@ export default function Setup({ data }) {
 
   async function addHeat(event) {
     const max = Math.max(0, ...order.filter((h) => h.event_id === event.id).map((h) => h.heat_no))
-    await supabase.from('vc_heats').insert({ event_id: event.id, heat_no: max + 1 })
+    const { error } = await supabase.from('vc_heats').insert({ event_id: event.id, heat_no: max + 1 })
+    if (error) say('error', error.message)
+    else say('ok', `Heat ${max + 1} added to Event ${event.event_no}. It is empty: open it in the Call Room and use “Add swimmer” on each lane.`)
+    data.reload()
+  }
+
+  async function removeLastHeat(event) {
+    const hs = order.filter((h) => h.event_id === event.id).sort((a, b) => b.heat_no - a.heat_no)
+    const last = hs[0]
+    if (!last) return
+    const count = data.entries.filter((en) => en.heat_id === last.id).length
+    if (hs.length === 1) return say('error', 'An event needs at least one heat. Use Delete to remove the whole event.')
+    if (count > 0 && !window.confirm(`Heat ${last.heat_no} of Event ${event.event_no} has ${count} swimmer(s). Remove it anyway?`)) return
+    if (data.meet?.running_heat_id === last.id) return say('error', 'That heat is racing now. Move the meet on first.')
+    const { error } = await supabase.from('vc_heats').delete().eq('id', last.id)
+    if (error) say('error', error.message); else say('ok', `Heat ${last.heat_no} removed from Event ${event.event_no}.`)
     data.reload()
   }
 
@@ -355,7 +370,7 @@ export default function Setup({ data }) {
                 <td style={{ fontWeight: 800 }}>{e.event_no}</td>
                 <td>{e.name}</td>
                 <td className="num">{heatsFor(e.id)}</td>
-                <td><div className="actions"><button className="btn sm" onClick={() => addHeat(e)}>Add heat</button><button className="btn sm danger" onClick={() => deleteEvent(e)}>Delete</button></div></td>
+                <td><div className="actions"><button className="btn sm" onClick={() => addHeat(e)}>Add heat</button><button className="btn sm" disabled={heatsFor(e.id) <= 1} onClick={() => removeLastHeat(e)}>Remove last heat</button><button className="btn sm danger" onClick={() => deleteEvent(e)}>Delete</button></div></td>
               </tr>
             ))}
           </tbody>
