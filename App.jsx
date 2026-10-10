@@ -9,7 +9,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/register" element={<Register />} />
-      <Route path="/tv" element={<AuthGate><TV /></AuthGate>} />
+      <Route path="/tv" element={<TV />} />
       <Route path="/board" element={<AuthGate><Board /></AuthGate>} />
       <Route path="/" element={<AuthGate><Console /></AuthGate>} />
       <Route path="*" element={<Navigate to="/" replace />} />

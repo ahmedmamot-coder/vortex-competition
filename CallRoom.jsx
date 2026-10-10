@@ -154,7 +154,7 @@ export default function CallRoom({ data, onGoSetup }) {
                 <label className="small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input type="checkbox" checked={autoTv} onChange={(e) => toggleAutoTv(e.target.checked)} /> Read each call out loud on the TV automatically
                 </label>
-                <a className="small" href="/tv" target="_blank" rel="noreferrer" style={{ marginLeft: 'auto' }}>Open TV screen</a>
+                {meet?.display_key && <a className="small" href={`/tv?key=${meet.display_key}`} target="_blank" rel="noreferrer" style={{ marginLeft: 'auto' }}>Open TV screen</a>}
               </div>
               <form onSubmit={announceCustom} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <input className="input" style={{ flex: '1 1 280px', width: 'auto', minHeight: 40 }} maxLength={400} placeholder="Custom announcement, e.g. All Event 12 swimmers to the call room (English or Arabic)" aria-label="Custom TV announcement" value={custom} onChange={(e) => setCustom(e.target.value)} />

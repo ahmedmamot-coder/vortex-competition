@@ -203,6 +203,19 @@ export default function Setup({ data }) {
     data.reload()
   }
 
+  // Spectator TV link
+  const [tvCopied, setTvCopied] = useState(false)
+  async function copyTvLink() {
+    try { await navigator.clipboard.writeText(`${window.location.origin}/tv?key=${meet.display_key}`); setTvCopied(true); setTimeout(() => setTvCopied(false), 2000) } catch { /* ignore */ }
+  }
+  async function newTvLink() {
+    if (!window.confirm('Make a new TV link? Every TV using the old link will stop and need the new link.')) return
+    const display_key = (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^a-z0-9]/gi, '') + Math.random().toString(36).slice(2, 10)
+    const { error } = await supabase.from('vc_meet').update({ display_key }).eq('id', meet.id)
+    if (error) say('error', error.message); else say('ok', 'New TV link created. Open it on each TV.')
+    data.reload()
+  }
+
   // Organizer access
   const [admins, setAdmins] = useState([])
   const [newAdmin, setNewAdmin] = useState('')
@@ -347,6 +360,22 @@ export default function Setup({ data }) {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h2 style={{ fontSize: 18 }}>Spectator TV screens</h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          Open this link on every TV (any number of screens). TVs don't sign in and can only show the call room display: heats, lanes being called and announcements. No staff, QID or bank data can be reached from a TV.
+          Turn voice on for one screen per hall and choose “Display only” on the others. If the link is ever shared by mistake, make a new one: all old TV links stop working at once.
+        </p>
+        {meet.display_key && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input className="input num" readOnly aria-label="Spectator TV link" value={`${window.location.origin}/tv?key=${meet.display_key}`} style={{ flex: '1 1 360px', width: 'auto', minHeight: 40, fontSize: 13 }} onFocus={(e) => e.target.select()} />
+            <button className="btn sm dark" onClick={copyTvLink}>{tvCopied ? 'Copied' : 'Copy TV link'}</button>
+            <a className="btn sm" href={`/tv?key=${meet.display_key}`} target="_blank" rel="noreferrer">Open</a>
+            <button className="btn sm danger" onClick={newTvLink}>New link (disconnect all TVs)</button>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

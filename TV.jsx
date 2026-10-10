@@ -1,12 +1,49 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import logoH from './logo-horizontal.svg'
 import { supabase } from './supabase.js'
-import { useMeet } from './useMeet.js'
 import { heatCode, isArabic, speechForHeat } from './lib.js'
 
-// Spectator-area TV: shows which heats are being called and reads every call
-// out loud (voice-over) so swimmers in the stands go to the call room.
-// Calls arrive live from the console (Call Room) through vc_announcements.
+// Spectator-area TV (kiosk). Opened with a secret link: /tv?key=…  No sign-in on
+// the TV, so nothing private can be opened from it. Every TV polls the read-only
+// feed vc_display_state() every 2 seconds, so any number of screens stay in sync,
+// and recover on their own after Wi-Fi drops. The feed returns only what the TV
+// shows: heats, lanes of heats being called, and recent call announcements.
+
+const POLL_MS = 2000
+
+function useDisplay(key) {
+  const [state, setState] = useState(null)
+  const [banner, setBanner] = useState(null)
+  const [status, setStatus] = useState('loading') // loading | ok | badkey | offline
+  const lastOk = useRef(0)
+  useEffect(() => {
+    if (!key) { setStatus('badkey'); return }
+    let stop = false
+    let first = true
+    async function tick() {
+      try {
+        const { data, error } = await supabase.rpc('vc_display_state', { p_key: key, p_with_banner: first })
+        if (stop) return
+        if (error) throw error
+        if (!data) { setStatus('badkey'); return }
+        if (first && data.meet?.sponsor_banner) setBanner(data.meet.sponsor_banner)
+        if (!data.meet?.has_banner) setBanner(null)
+        first = false
+        lastOk.current = Date.now()
+        setState(data)
+        setStatus('ok')
+      } catch {
+        if (!stop && Date.now() - lastOk.current > 8000) setStatus('offline')
+      }
+      if (!stop) setTimeout(tick, POLL_MS)
+    }
+    tick()
+    // Re-fetch the banner every 10 minutes in case it was changed.
+    const b = setInterval(() => { first = true }, 600000)
+    return () => { stop = true; clearInterval(b) }
+  }, [key])
+  return { state, banner, status }
+}
 
 const STAGE_STYLE = {
   1: { label: '1st call', bg: '#1f23c9' },
@@ -22,7 +59,15 @@ function savePref(key, v) {
 }
 
 export default function TV() {
-  const { meet, order, runIdx, entries, laneStart, loading } = useMeet()
+  const key = new URLSearchParams(window.location.search).get('key')
+  const { state, banner, status } = useDisplay(key)
+  const meet = state?.meet
+  const heats = state?.heats || []
+  const runRn = state?.run_rn || 0
+  const entries = state?.entries || []
+  const laneStart = state?.lane_zero ? 0 : 1
+  const loading = status === 'loading'
+  const [mode, setMode] = useState(() => pref('vc-tv-mode', null)) // 'voice' | 'display' | null
   const [voiceOn, setVoiceOn] = useState(false)
   const [lang, setLang] = useState(() => pref('vc-tv-lang', 'en-ar'))
   const [repeat, setRepeat] = useState(() => pref('vc-tv-repeat', 1))
@@ -33,15 +78,14 @@ export default function TV() {
   const queue = useRef([])
   const speaking = useRef(false)
   const audioCtx = useRef(null)
-  const orderRef = useRef(order)
-  orderRef.current = order
+  const baselined = useRef(false)
   const settings = useRef({ voiceOn, lang, repeat })
   settings.current = { voiceOn, lang, repeat }
 
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 15000); return () => clearInterval(t) }, [])
   useEffect(() => { savePref('vc-tv-lang', lang) }, [lang])
   useEffect(() => { savePref('vc-tv-repeat', repeat) }, [repeat])
-  useEffect(() => { if (!voiceOn) return; const t = setTimeout(() => setShowControls(false), 8000); return () => clearTimeout(t) }, [voiceOn])
+  useEffect(() => { if (!voiceOn && mode !== 'display') return; const t = setTimeout(() => setShowControls(false), 8000); return () => clearTimeout(t) }, [voiceOn, mode, showControls])
 
   // ---------- audio ----------
   function chime() {
@@ -123,7 +167,7 @@ export default function TV() {
     if (row.message) {
       item = { id: row.id, custom: true, en: row.message, title: 'Announcement', heat: null }
     } else {
-      const h = orderRef.current.find((x) => x.id === row.heat_id)
+      const h = { event_no: row.event_no, event_name: row.event_name, heat_no: row.heat_no }
       const s = speechForHeat(h, row.stage)
       if (!s) return
       item = { id: row.id, custom: false, en: s.en, ar: s.ar, title: s.label, stage: row.stage, heat: h }
@@ -132,17 +176,27 @@ export default function TV() {
     runQueue()
   }
 
-  // ---------- live announcements ----------
+  // ---------- announcements from the feed ----------
   useEffect(() => {
-    if (!meet?.id) return
-    const ch = supabase.channel('vc-tv-announce')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vc_announcements', filter: `meet_id=eq.${meet.id}` }, (p) => {
-        const row = p.new
-        if (Date.now() - new Date(row.created_at).getTime() < 120000) enqueue(row)
-      })
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [meet?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    const list = state?.announcements
+    if (!list) return
+    if (!baselined.current) { // don't replay calls made before this TV was switched on
+      list.forEach((a) => seen.current.add(a.id))
+      baselined.current = true
+      return
+    }
+    list.forEach((a) => enqueue(a))
+  }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the TV screen awake.
+  useEffect(() => {
+    let lock = null
+    const get = async () => { try { lock = await navigator.wakeLock?.request('screen') } catch { /* not supported */ } }
+    get()
+    const onVis = () => { if (document.visibilityState === 'visible') get() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { document.removeEventListener('visibilitychange', onVis); try { lock?.release() } catch { /* ignore */ } }
+  }, [])
 
   function enableVoice() {
     try {
@@ -155,9 +209,14 @@ export default function TV() {
       window.speechSynthesis?.speak(u)
     } catch { /* ignore */ }
     setVoiceOn(true)
+    setMode('voice'); savePref('vc-tv-mode', 'voice')
+  }
+  function displayOnly() {
+    setVoiceOn(false)
+    setMode('display'); savePref('vc-tv-mode', 'display')
   }
   function testVoice() {
-    const h = order.find((x, i) => i > runIdx) || order[0]
+    const h = heats.find((x) => x.rn > runRn) || heats[0]
     const s = h ? speechForHeat(h, 1) : null
     queue.current.push(s
       ? { id: `test-${Date.now()}`, custom: false, en: s.en, ar: s.ar, title: 'Test · ' + s.label, stage: 1, heat: h }
@@ -166,16 +225,16 @@ export default function TV() {
   }
 
   // ---------- what to show ----------
-  const calling = useMemo(() => order
-    .filter((h, i) => i > runIdx && h.call_stage >= 1 && h.call_stage <= 3)
+  const calling = useMemo(() => heats
+    .filter((h) => h.rn > runRn && h.call_stage >= 1 && h.call_stage <= 3)
     .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
-    .slice(0, 2), [order, runIdx])
-  const racing = runIdx >= 0 ? order[runIdx] : null
-  const upcoming = useMemo(() => order.filter((h, i) => i > runIdx && h.call_stage === 0).slice(0, 4), [order, runIdx])
+    .slice(0, 2), [heats, runRn])
+  const racing = heats.find((h) => h.rn === runRn) || null
+  const upcoming = useMemo(() => heats.filter((h) => h.rn > runRn && h.call_stage === 0).slice(0, 4), [heats, runRn])
 
   function lanesFor(h) {
     const n = meet?.lanes || 8
-    const by = new Map(entries.filter((e) => e.heat_id === h.id).map((e) => [e.lane, e]))
+    const by = new Map(entries.filter((e) => e.heat_id === h.id).map((e) => [e.lane, { ...e, id: `${h.id}-${e.lane}` }]))
     return Array.from({ length: n }, (_, i) => by.get(i + laneStart)).filter(Boolean)
   }
 
@@ -244,7 +303,7 @@ export default function TV() {
         </aside>
       </main>
 
-      {meet?.sponsor_banner && <footer className="tv-foot"><img src={meet.sponsor_banner} alt="Meet sponsors" /></footer>}
+      {banner && <footer className="tv-foot"><img src={banner} alt="Meet sponsors" /></footer>}
 
       {flash && (
         <div className="tv-flash" role="status" aria-live="assertive">
@@ -258,26 +317,37 @@ export default function TV() {
         </div>
       )}
 
-      {!voiceOn ? (
+      {status === 'badkey' ? (
         <div className="tv-enable">
-          <button className="btn primary" style={{ minHeight: 64, fontSize: 22, padding: '0 32px' }} onClick={enableVoice}>Tap to turn on voice announcements</button>
-          <div className="small muted">Browsers only allow sound after one tap. Keep this screen open on the spectator TV.</div>
+          <div style={{ fontSize: 26, fontWeight: 800 }}>This TV link is not valid</div>
+          <div className="small muted">Open Meet Setup → Spectator TV in the console and use the current TV link. Links stop working when a new one is generated.</div>
+        </div>
+      ) : !voiceOn && mode !== 'display' ? (
+        <div className="tv-enable">
+          <div style={{ fontSize: 24, fontWeight: 800 }}>Set up this screen</div>
+          <button className="btn primary" style={{ minHeight: 64, fontSize: 22, padding: '0 32px' }} onClick={enableVoice}>Voice + display (the TV connected to the speakers)</button>
+          <button className="btn" style={{ minHeight: 56, fontSize: 18, padding: '0 28px' }} onClick={displayOnly}>Display only, no sound (all other TVs)</button>
+          <div className="small muted" style={{ maxWidth: 560 }}>Use voice on one screen per hall so announcements don't echo. Browsers only allow sound after a tap, so the voice screen asks again after a restart.</div>
         </div>
       ) : showControls && (
         <div className="tv-controls">
-          <span className="chip ok">Voice on</span>
-          <select className="input" aria-label="Announcement language" value={lang} onChange={(e) => setLang(e.target.value)} style={{ width: 'auto', minHeight: 36 }}>
-            <option value="en-ar">English + Arabic</option>
-            <option value="en">English only</option>
-          </select>
-          <select className="input" aria-label="Repeat" value={repeat} onChange={(e) => setRepeat(+e.target.value)} style={{ width: 'auto', minHeight: 36 }}>
-            <option value={1}>Say once</option>
-            <option value={2}>Say twice</option>
-          </select>
-          <button className="btn sm" onClick={testVoice}>Test voice</button>
+          {voiceOn ? <span className="chip ok">Voice on</span> : <button className="btn sm" onClick={enableVoice}>Turn voice on</button>}
+          {voiceOn && <>
+            <select className="input" aria-label="Announcement language" value={lang} onChange={(e) => setLang(e.target.value)} style={{ width: 'auto', minHeight: 36 }}>
+              <option value="en-ar">English + Arabic</option>
+              <option value="en">English only</option>
+            </select>
+            <select className="input" aria-label="Repeat" value={repeat} onChange={(e) => setRepeat(+e.target.value)} style={{ width: 'auto', minHeight: 36 }}>
+              <option value={1}>Say once</option>
+              <option value={2}>Say twice</option>
+            </select>
+            <button className="btn sm" onClick={testVoice}>Test voice</button>
+          </>}
           <button className="btn sm" onClick={() => document.documentElement.requestFullscreen?.()}>Full screen</button>
         </div>
       )}
+
+      {status === 'offline' && <div className="tv-offline">Reconnecting…</div>}
     </div>
   )
 }
