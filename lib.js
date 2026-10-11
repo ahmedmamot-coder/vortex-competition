@@ -9,11 +9,7 @@ export const SESSIONS = [
 
 export const BANKS = ['QNB', 'Commercial Bank', 'Doha Bank', 'QIB', 'QIIB', 'Masraf Al Rayan', 'Dukhan Bank', 'Ahli Bank', 'Qatar Development Bank', 'HSBC Qatar', 'Standard Chartered', 'Other']
 
-export const IBAN_RE = /^QA\d{2}[A-Z]{4}[A-Z0-9]{21}$/
-export const cleanIban = (v) => (v || '').replace(/\s+/g, '').toUpperCase()
 export const maskQid = (q) => (q ? q.slice(0, 3) + '•••••' + q.slice(-3) : '')
-export const maskIban = (i) => (i ? i.slice(0, 4) + ' •••• •••• ' + i.slice(-4) : '')
-export const fmtIban = (i) => (i || '').replace(/(.{4})/g, '$1 ').trim()
 
 export function heatCode(h) {
   return `E${h.event_no} · H${h.heat_no}`

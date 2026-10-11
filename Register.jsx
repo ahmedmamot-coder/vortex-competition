@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import logoH from './logo-horizontal.svg'
 import { supabase } from './supabase.js'
-import { BANKS, IBAN_RE, SESSIONS, cleanIban, maskIban, maskQid } from './lib.js'
+import { BANKS, SESSIONS, maskQid } from './lib.js'
 
-const EMPTY = { full_name: '', qid: '', mobile: '', email: '', bank_name: '', account_holder: '', iban: '', position: '', sessions: [], consent: false }
+const EMPTY = { full_name: '', qid: '', mobile: '', email: '', bank_name: '', account_holder: '', fawran_mobile: '', fawran_same: true, position: '', sessions: [], consent: false }
 
 export default function Register() {
   const [meet, setMeet] = useState(null)
@@ -31,7 +31,7 @@ export default function Register() {
     if (!/^\d{8}$/.test(v.mobile)) e.mobile = 'Enter an 8-digit Qatar mobile number.'
     if (v.email && !/^\S+@\S+\.\S+$/.test(v.email)) e.email = 'Check the email address.'
     if (!v.bank_name) e.bank_name = 'Choose your bank.'
-    if (!IBAN_RE.test(cleanIban(v.iban))) e.iban = `Qatar IBANs start with QA and have 29 characters (${cleanIban(v.iban).length} entered).`
+    if (!v.fawran_same && !/^\d{8}$/.test(v.fawran_mobile)) e.fawran_mobile = 'Enter the 8-digit mobile number registered for Fawran.'
     if (!v.position) e.position = 'Choose one position.'
     if (!v.consent) e.consent = 'Please confirm to continue.'
     return e
@@ -64,7 +64,7 @@ export default function Register() {
       email: f.email.trim() || null,
       bank_name: f.bank_name,
       account_holder: f.account_holder.trim() || null,
-      iban: cleanIban(f.iban),
+      fawran_mobile: f.fawran_same ? f.mobile : f.fawran_mobile,
       position: f.position,
       sessions: f.sessions,
       consent: true
@@ -81,8 +81,6 @@ export default function Register() {
     if (!g) { g = { name: p.group_name, items: [] }; groups.push(g) }
     g.items.push(p.name)
   })
-  const ib = cleanIban(f.iban)
-  const ibanOk = IBAN_RE.test(ib)
 
   return (
     <div>
@@ -102,7 +100,7 @@ export default function Register() {
           <div className="card" style={{ width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 8, fontSize: 14 }}>
             <Row k="QID" v={maskQid(done.qid)} />
             <Row k="Bank" v={done.bank_name} />
-            <Row k="IBAN" v={maskIban(done.iban)} />
+            <Row k="Fawran mobile" v={`+974 ${done.fawran_mobile}`} />
           </div>
           <button className="btn" onClick={() => { setDone(null); setF(EMPTY); setTried(false); setErrors({}) }}>Register another person</button>
         </div>
@@ -145,9 +143,22 @@ export default function Register() {
           <Field id="ah" label="Account holder name">
             <input id="ah" className="input" value={f.account_holder} onChange={(e) => set('account_holder', e.target.value)} placeholder="Must match your full name" />
           </Field>
-          <Field id="ib" label="IBAN" err={errors.iban} hint={!errors.iban ? (ibanOk ? 'IBAN format looks correct.' : 'Starts with QA · 29 characters. Find it in your banking app.') : null} hintOk={ibanOk}>
-            <input id="ib" className={`input num ${errors.iban ? 'err' : ''}`} autoCapitalize="characters" value={f.iban} onChange={(e) => set('iban', e.target.value.toUpperCase())} placeholder="QA00 XXXX 0000 0000 0000 0000 0000 0" />
-          </Field>
+          <div className="field" data-err={errors.fawran_mobile ? 'true' : undefined}>
+            <span className="label">Fawran mobile number (for payment)</span>
+            <label className="small" style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+              <input type="checkbox" checked={f.fawran_same} onChange={(e) => set('fawran_same', e.target.checked)} style={{ width: 18, height: 18, accentColor: '#1f23c9' }} />
+              Same as my mobile number{f.mobile ? ` (+974 ${f.mobile})` : ''}
+            </label>
+            {!f.fawran_same && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <span className="input" style={{ width: 'auto', display: 'flex', alignItems: 'center', fontWeight: 700, background: 'var(--soft-2)' }}>+974</span>
+                <input id="fw" aria-label="Fawran mobile number" className={`input ${errors.fawran_mobile ? 'err' : ''}`} type="tel" inputMode="numeric" maxLength={8} value={f.fawran_mobile} onChange={(e) => set('fawran_mobile', e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="8 digits" />
+              </div>
+            )}
+            {errors.fawran_mobile
+              ? <span className="err-text">{errors.fawran_mobile}</span>
+              : <span className="small muted">Payment is sent by Fawran instant transfer to the mobile number linked to your bank account.</span>}
+          </div>
 
           <div className="sep" />
           <fieldset style={{ border: 0, padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }} data-err={errors.position ? 'true' : undefined}>
@@ -180,7 +191,7 @@ export default function Register() {
 
           <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5, color: 'var(--ink-2)', cursor: 'pointer' }} data-err={errors.consent ? 'true' : undefined}>
             <input type="checkbox" checked={f.consent} onChange={(e) => set('consent', e.target.checked)} style={{ width: 20, height: 20, margin: '1px 0 0', accentColor: '#1f23c9', flex: 'none' }} />
-            <span>I confirm my details are correct and agree that Vortex Aquatics uses my QID and bank details only for accreditation and staff payment for this meet.</span>
+            <span>I confirm my details are correct and agree that Vortex Aquatics uses my QID and payment details only for accreditation and staff payment for this meet.</span>
           </label>
           {errors.consent && <span className="err-text" style={{ marginTop: -10 }}>{errors.consent}</span>}
 

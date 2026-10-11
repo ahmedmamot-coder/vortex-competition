@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from './supabase.js'
-import { SESSIONS, download, fmtIban, maskIban, maskQid, toCsv } from './lib.js'
+import { SESSIONS, download, maskQid, toCsv } from './lib.js'
 
 const FILTERS = ['all', 'pending', 'approved', 'declined']
 
@@ -24,8 +24,8 @@ export default function Applications({ data }) {
     await supabase.from('vc_applications').update({ position }).eq('id', a.id)
   }
   function exportApproved() {
-    const rows = [['Full name', 'QID', 'Mobile', 'Email', 'Position', 'Bank', 'Account holder', 'IBAN', 'Sessions']]
-    apps.filter((a) => a.status === 'approved').forEach((a) => rows.push([a.full_name, a.qid, '+974' + a.mobile, a.email, a.position, a.bank_name, a.account_holder, a.iban, (a.sessions || []).map(sessionName).join(' / ')]))
+    const rows = [['Full name', 'QID', 'Mobile', 'Email', 'Position', 'Bank', 'Account holder', 'Fawran mobile', 'Sessions']]
+    apps.filter((a) => a.status === 'approved').forEach((a) => rows.push([a.full_name, a.qid, '+974' + a.mobile, a.email, a.position, a.bank_name, a.account_holder, a.fawran_mobile ? '+974' + a.fawran_mobile : '', (a.sessions || []).map(sessionName).join(' / ')]))
     download('vortex-competition-approved-staff.csv', toCsv(rows))
   }
   async function copyLink() {
@@ -37,7 +37,7 @@ export default function Applications({ data }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
         <div>
           <h2 style={{ fontSize: 24 }}>Staff applications</h2>
-          <p className="muted" style={{ margin: '4px 0 0' }}>QID and IBAN are masked — press Show to see the full details.</p>
+          <p className="muted" style={{ margin: '4px 0 0' }}>QID is masked — press Show to see the full details.</p>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <button className="btn sm dark" onClick={copyLink}>{copied ? 'Link copied' : 'Copy registration link'}</button>
@@ -63,7 +63,7 @@ export default function Applications({ data }) {
       <div className="table">
         <table style={{ minWidth: 1040 }}>
           <thead>
-            <tr><th>Full name</th><th>QID</th><th>Bank / IBAN</th><th>Position</th><th>Sessions</th><th>Status</th><th style={{ textAlign: 'right' }}>Decision</th></tr>
+            <tr><th>Full name</th><th>QID</th><th>Bank / Fawran</th><th>Position</th><th>Sessions</th><th>Status</th><th style={{ textAlign: 'right' }}>Decision</th></tr>
           </thead>
           <tbody>
             {list.length === 0 && <tr><td colSpan={7} className="empty">No applications here yet. Share the registration link with interested staff.</td></tr>}
@@ -79,7 +79,7 @@ export default function Applications({ data }) {
                   <td className="num">{show ? a.qid : maskQid(a.qid)}</td>
                   <td>
                     <div className="small" style={{ fontWeight: 600 }}>{a.bank_name}{a.account_holder ? ` · ${a.account_holder}` : ''}</div>
-                    <div className="num small">{show ? fmtIban(a.iban) : maskIban(a.iban)}</div>
+                    <div className="num small">Fawran: {a.fawran_mobile ? `+974 ${a.fawran_mobile}` : '—'}</div>
                     <button className="btn sm" style={{ minHeight: 28, marginTop: 4 }} onClick={() => setRevealed((r) => ({ ...r, [a.id]: !show }))}>{show ? 'Hide' : 'Show'}</button>
                   </td>
                   <td>
