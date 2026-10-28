@@ -6,17 +6,21 @@ import CallRoom from './CallRoom.jsx'
 import Officials from './Officials.jsx'
 import Applications from './Applications.jsx'
 import Setup from './Setup.jsx'
+import People from './People.jsx'
+import { usePeople } from './photos.jsx'
 import { heatCode } from './lib.js'
 
 const TABS = [
   { id: 'call', label: 'Call Room' },
   { id: 'officials', label: 'Officials & Positions' },
   { id: 'staff', label: 'Staff Applications' },
+  { id: 'people', label: 'People & Photos' },
   { id: 'setup', label: 'Meet Setup' }
 ]
 
 export default function Console() {
   const data = useMeet()
+  const people = usePeople(data.apps)
   const [tab, setTab] = useState(() => {
     try { return localStorage.getItem('vc-tab') || 'call' } catch { return 'call' }
   })
@@ -96,9 +100,10 @@ export default function Console() {
 
         {data.loading ? <div className="empty">Loading meet…</div> : (
           <>
-            {tab === 'call' && <CallRoom data={data} onGoSetup={() => pick('setup')} />}
+            {tab === 'call' && <CallRoom data={data} people={people} onGoSetup={() => pick('setup')} />}
             {tab === 'officials' && <Officials data={data} />}
             {tab === 'staff' && <Applications data={data} />}
+            {tab === 'people' && <People data={data} people={people} />}
             {tab === 'setup' && <Setup data={data} />}
           </>
         )}

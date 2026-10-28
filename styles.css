@@ -184,3 +184,27 @@ textarea.input { padding: 12px 14px; min-height: 140px; font-family: ui-monospac
 .tv-controls { position: absolute; right: 2vw; bottom: 2vw; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px 10px; box-shadow: 0 6px 24px rgba(18,18,54,.12); z-index: 25; }
 @media (max-width: 900px) { .tv-main { grid-template-columns: 1fr; } .tv-lanes { grid-template-columns: 1fr; grid-auto-flow: row; } }
 .tv-offline { position: absolute; left: 2vw; bottom: 2vw; background: #b42318; color: #fff; font-weight: 800; padding: 8px 14px; border-radius: 10px; z-index: 26; }
+
+/* Board photos */
+.board-photo { width: 2.1em; height: 2.8em; border-radius: 8px; object-fit: cover; flex: none; }
+
+/* Printable heat sheet */
+.hs { max-width: 1200px; margin: 0 auto; padding: 20px; color: var(--navy); }
+.hs-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.hs-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 2px solid var(--navy); }
+.hs-cols { columns: 2 460px; column-gap: 28px; }
+.hs-event { break-inside: avoid-column; margin-bottom: 16px; }
+.hs-event-title { font-weight: 800; font-size: 14px; background: var(--navy); color: #fff; padding: 6px 10px; border-radius: 6px; }
+.hs-heat { break-inside: avoid; margin-top: 8px; }
+.hs-heat-title { font-weight: 800; font-size: 12px; color: var(--blue); text-transform: uppercase; letter-spacing: .06em; margin: 4px 0; }
+.hs table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.hs td { padding: 3px 6px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+.hs-lane { width: 22px; font-weight: 800; text-align: center; }
+.hs-photo { width: 26px; height: 35px; border-radius: 5px; object-fit: cover; display: block; }
+@media print {
+  .no-print { display: none !important; }
+  .hs { padding: 0; max-width: none; }
+  .hs-cols { columns: 2; }
+  @page { size: A4; margin: 10mm; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

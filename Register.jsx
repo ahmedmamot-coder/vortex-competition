@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import logoH from './logo-horizontal.svg'
 import { supabase } from './supabase.js'
 import { BANKS, SESSIONS, maskQid } from './lib.js'
+import { PhotoPicker, uploadPhoto } from './photos.jsx'
 
-const EMPTY = { full_name: '', qid: '', mobile: '', email: '', bank_name: '', account_holder: '', fawran_mobile: '', fawran_same: true, position: '', sessions: [], consent: false }
+const EMPTY = { full_name: '', qid: '', mobile: '', email: '', bank_name: '', account_holder: '', fawran_mobile: '', fawran_same: true, position: '', sessions: [], consent: false, marketing: false, photo: null }
 
 export default function Register() {
   const [meet, setMeet] = useState(null)
@@ -32,6 +33,7 @@ export default function Register() {
     if (v.email && !/^\S+@\S+\.\S+$/.test(v.email)) e.email = 'Check the email address.'
     if (!v.bank_name) e.bank_name = 'Choose your bank.'
     if (!v.fawran_same && !/^\d{8}$/.test(v.fawran_mobile)) e.fawran_mobile = 'Enter the 8-digit mobile number registered for Fawran.'
+    if (!v.photo) e.photo = 'Add a clear photo of your face for your accreditation badge.'
     if (!v.position) e.position = 'Choose one position.'
     if (!v.consent) e.consent = 'Please confirm to continue.'
     return e
@@ -56,6 +58,8 @@ export default function Register() {
       return
     }
     setBusy(true); setServerError(null)
+    let photo_path = null
+    try { photo_path = await uploadPhoto('staff', f.photo.blob) } catch (x) { setBusy(false); setServerError(x.message); return }
     const row = {
       meet_id: meet?.id || null,
       full_name: f.full_name.trim().replace(/\s+/g, ' '),
@@ -67,12 +71,14 @@ export default function Register() {
       fawran_mobile: f.fawran_same ? f.mobile : f.fawran_mobile,
       position: f.position,
       sessions: f.sessions,
-      consent: true
+      consent: true,
+      marketing_consent: f.marketing,
+      photo_path
     }
     const { error } = await supabase.from('vc_applications').insert(row)
     setBusy(false)
     if (error) setServerError('We could not send your application. Please check your details and try again.')
-    else { setDone(row); window.scrollTo({ top: 0 }) }
+    else { setDone({ ...row, preview: f.photo.preview }); window.scrollTo({ top: 0 }) }
   }
 
   const groups = []
@@ -92,7 +98,8 @@ export default function Register() {
 
       {done ? (
         <div className="form-page" style={{ alignItems: 'center', textAlign: 'center', paddingTop: 48 }}>
-          <div style={{ width: 72, height: 72, borderRadius: 36, background: '#eef0ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {done.preview && <img src={done.preview} alt="Your badge photo" style={{ width: 90, height: 120, borderRadius: 12, objectFit: 'cover' }} />}
+          <div style={{ width: 72, height: 72, borderRadius: 36, background: '#eef0ff', display: done.preview ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#1f23c9" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
           </div>
           <h1 style={{ fontSize: 26 }}>Application received</h1>
@@ -118,6 +125,7 @@ export default function Register() {
           <Field id="fn" label="Full name (as on QID)" err={errors.full_name}>
             <input id="fn" className={`input ${errors.full_name ? 'err' : ''}`} autoComplete="name" value={f.full_name} onChange={(e) => set('full_name', e.target.value)} placeholder="First, middle and last name" />
           </Field>
+          <PhotoPicker label="Your photo (for your accreditation badge)" value={f.photo} onChange={(v) => set('photo', v)} err={errors.photo} />
           <Field id="qid" label="QID number" err={errors.qid}>
             <input id="qid" className={`input num ${errors.qid ? 'err' : ''}`} inputMode="numeric" maxLength={11} value={f.qid} onChange={(e) => set('qid', e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="11 digits" />
           </Field>
@@ -191,9 +199,13 @@ export default function Register() {
 
           <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5, color: 'var(--ink-2)', cursor: 'pointer' }} data-err={errors.consent ? 'true' : undefined}>
             <input type="checkbox" checked={f.consent} onChange={(e) => set('consent', e.target.checked)} style={{ width: 20, height: 20, margin: '1px 0 0', accentColor: '#1f23c9', flex: 'none' }} />
-            <span>I confirm my details are correct and agree that Vortex Aquatics uses my QID and payment details only for accreditation and staff payment for this meet.</span>
+            <span>I confirm my details are correct and agree that Vortex Aquatics uses my photo, QID and payment details for accreditation and staff payment for this meet.</span>
           </label>
           {errors.consent && <span className="err-text" style={{ marginTop: -10 }}>{errors.consent}</span>}
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5, color: 'var(--ink-2)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={f.marketing} onChange={(e) => set('marketing', e.target.checked)} style={{ width: 20, height: 20, margin: '1px 0 0', accentColor: '#1f23c9', flex: 'none' }} />
+            <span>Optional: Vortex may use my name and photo in meet promotion and social media.</span>
+          </label>
 
           {serverError && <div className="notice error">{serverError}</div>}
           <button className="btn primary" style={{ minHeight: 54, fontSize: 16 }} disabled={busy}>{busy ? 'Sending…' : 'Submit application'}</button>

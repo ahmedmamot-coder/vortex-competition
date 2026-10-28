@@ -4,12 +4,16 @@ import Console from './Console.jsx'
 import Board from './Board.jsx'
 import Register from './Register.jsx'
 import TV from './TV.jsx'
+import SwimmerRegister from './SwimmerRegister.jsx'
+import HeatSheet from './HeatSheet.jsx'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/register" element={<Register />} />
       <Route path="/tv" element={<TV />} />
+      <Route path="/swimmer" element={<SwimmerRegister />} />
+      <Route path="/heatsheet" element={<AuthGate><HeatSheet /></AuthGate>} />
       <Route path="/board" element={<AuthGate><Board /></AuthGate>} />
       <Route path="/" element={<AuthGate><Console /></AuthGate>} />
       <Route path="*" element={<Navigate to="/" replace />} />

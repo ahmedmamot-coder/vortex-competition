@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase.js'
 import { STAGES, announceText, heatCode, statusFor } from './lib.js'
+import { Avatar } from './photos.jsx'
 
-export default function CallRoom({ data, onGoSetup }) {
+export default function CallRoom({ data, people, onGoSetup }) {
   const { order, runIdx, entries, meet, laneStart } = data
   const [selId, setSelId] = useState(null)
 
@@ -171,7 +172,7 @@ export default function CallRoom({ data, onGoSetup }) {
               </thead>
               <tbody>
                 {lanes.map((l) => (
-                  <LaneRow key={l.empty ? `e${l.lane}` : l.id} l={l} heat={sel} lanes={lanes} data={data} onToggleCheck={() => patchEntry(l, { checked_in: !l.checked_in })} onToggleScratch={() => patchEntry(l, { scratched: !l.scratched, checked_in: false })} />
+                  <LaneRow key={l.empty ? `e${l.lane}` : l.id} l={l} photo={people?.photoForEntry(l)} heat={sel} lanes={lanes} data={data} onToggleCheck={() => patchEntry(l, { checked_in: !l.checked_in })} onToggleScratch={() => patchEntry(l, { scratched: !l.scratched, checked_in: false })} />
                 ))}
               </tbody>
             </table>
@@ -183,7 +184,7 @@ export default function CallRoom({ data, onGoSetup }) {
 }
 
 // One lane of the selected heat: shows the swimmer, or lets the organizer add / edit / remove one.
-function LaneRow({ l, heat, lanes, data, onToggleCheck, onToggleScratch }) {
+function LaneRow({ l, photo, heat, lanes, data, onToggleCheck, onToggleScratch }) {
   const [editing, setEditing] = useState(false)
   const [f, setF] = useState({ swimmer_name: '', club: '', seed_time: '', lane: l.lane })
   const [err, setErr] = useState('')
@@ -256,7 +257,7 @@ function LaneRow({ l, heat, lanes, data, onToggleCheck, onToggleScratch }) {
   return (
     <tr className={l.scratched ? 'scratched' : ''}>
       <td><span className="lane">{l.lane}</span></td>
-      <td style={{ fontWeight: 700 }}>{l.swimmer_name}</td>
+      <td style={{ fontWeight: 700 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}><Avatar src={photo} name={l.swimmer_name} size={30} radius={6} />{l.swimmer_name}</span></td>
       <td className="small" style={{ color: 'var(--ink-2)' }}>{l.club}</td>
       <td className="num" style={{ fontWeight: 600 }}>{l.seed_time || 'NT'}</td>
       <td>

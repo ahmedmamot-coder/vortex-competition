@@ -1,11 +1,13 @@
 import { useMemo } from 'react'
 import logoH from './logo-horizontal.svg'
 import { useMeet } from './useMeet.js'
+import { usePeople } from './photos.jsx'
 
 // Full-screen call room display. Shows the heat most recently called (1st / 2nd / final),
 // otherwise the next heat to be called. Updates live.
 export default function Board() {
-  const { meet, order, runIdx, entries, loading, laneStart } = useMeet()
+  const { meet, order, runIdx, entries, loading, laneStart, apps } = useMeet()
+  const people = usePeople(apps)
 
   const shown = useMemo(() => {
     const after = order.slice(Math.max(runIdx + 1, 0))
@@ -54,6 +56,7 @@ export default function Board() {
             {lanes.map((l) => (
               <div key={l.lane} className="board-lane" style={{ opacity: l.empty || l.scratched ? 0.45 : 1 }}>
                 <span className="lane">{l.lane}</span>
+                {!l.empty && people.photoForEntry(l) && <img src={people.photoForEntry(l)} alt="" className="board-photo" />}
                 <span style={{ fontWeight: 700, flex: 1, minWidth: 0 }}>{l.empty ? '—' : l.swimmer_name}</span>
                 <span className="muted" style={{ fontSize: '0.75em' }}>{l.empty ? '' : l.scratched ? 'Scratched' : l.club}</span>
               </div>
