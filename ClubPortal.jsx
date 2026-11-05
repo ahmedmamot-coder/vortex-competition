@@ -30,7 +30,7 @@ export default function ClubPortal() {
   }
 
   return (
-    <div>
+    <div className="vx-page">
       <header style={{ borderBottom: '1px solid var(--line)' }}>
         <div className="wrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, paddingTop: 16, paddingBottom: 16, flexWrap: 'wrap' }}>
           <img src={logoH} alt="Vortex Swimming Club" style={{ height: 40 }} />

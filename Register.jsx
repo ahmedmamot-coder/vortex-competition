@@ -89,7 +89,7 @@ export default function Register() {
   })
 
   return (
-    <div>
+    <div className="vx-page">
       <header style={{ borderBottom: '1px solid var(--line)' }}>
         <div className="form-page" style={{ paddingTop: 18, paddingBottom: 18 }}>
           <img src={logoH} alt="Vortex Swimming Club" style={{ height: 44, alignSelf: 'flex-start' }} />
