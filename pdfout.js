@@ -1,6 +1,6 @@
 // PDF output: accreditation badges and the marketing photo book.
 // jsPDF is loaded on demand from cdnjs so the main app stays small.
-import logoUrl from './logo-horizontal.svg'
+import logoUrl from './logo-competition.png'
 import { urlToDataUrl } from './photos.jsx'
 
 const NAVY = [18, 18, 54]
@@ -24,16 +24,16 @@ function hex(h) { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) 
 
 async function logoPng() {
   try {
-    const svg = await (await fetch(logoUrl)).text()
-    const vb = (svg.match(/viewBox="([^"]+)"/) || [])[1]?.split(/[\s,]+/).map(Number)
-    const ratio = vb && vb[2] && vb[3] ? vb[2] / vb[3] : 3.2
     const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = logoUrl })
     const c = document.createElement('canvas')
-    c.width = 1200; c.height = Math.round(1200 / ratio)
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
-    return { data: c.toDataURL('image/png'), ratio }
+    c.width = img.naturalWidth; c.height = img.naturalHeight
+    c.getContext('2d').drawImage(img, 0, 0)
+    return { data: c.toDataURL('image/png'), ratio: img.naturalWidth / img.naturalHeight }
   } catch { return null }
 }
+
+// The built-in PDF fonts only cover basic Latin; swap the punctuation the meet name uses.
+const pdfText = (t) => String(t || '').replace(/\s*·\s*/g, ' - ').replace(/[–—]/g, '-')
 
 function imgSize(dataUrl) {
   return new Promise((res) => { const i = new Image(); i.onload = () => res({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => res(null); i.src = dataUrl })
@@ -97,9 +97,9 @@ export async function badgesPdf({ people, meet, onProgress }) {
     // Lanyard slot
     doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.roundedRect(x + W / 2 - 7, y + 4, 14, 3, 1.5, 1.5)
     // Logo
-    if (logo) { const lw = 46, lh = lw / logo.ratio; doc.addImage(logo.data, 'PNG', x + (W - lw) / 2, y + 10, lw, lh, undefined, 'FAST') }
+    if (logo) { const lw = 38, lh = lw / logo.ratio; doc.addImage(logo.data, 'PNG', x + (W - lw) / 2, y + 9.5, lw, lh, undefined, 'FAST') }
     doc.setTextColor(...MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5)
-    doc.text(doc.splitTextToSize((meet?.name || 'Vortex Competition').toUpperCase(), W - 16).slice(0, 2), x + W / 2, y + 30, { align: 'center' })
+    doc.text(doc.splitTextToSize(pdfText(meet?.name || 'Vortex Competition').toUpperCase(), W - 16).slice(0, 2), x + W / 2, y + 31.5, { align: 'center' })
     // Photo
     const pw = 40, ph = 53.3, px = x + (W - pw) / 2, py = y + 37
     photoOrPlaceholder(doc, photos[i], p.name, px, py, pw, ph)
@@ -141,7 +141,7 @@ export async function photoBookPdf({ sections, meet, onProgress }) {
   function header(first) {
     if (logo) { const lw = first ? 52 : 34; doc.addImage(logo.data, 'PNG', M, 10, lw, lw / logo.ratio, undefined, 'FAST') }
     doc.setTextColor(...MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(8)
-    doc.text(`${meet?.name || 'Vortex Competition'}${meet?.meet_date ? ' · ' + meet.meet_date : ''}`, 210 - M, 14, { align: 'right' })
+    doc.text(pdfText(`${meet?.name || 'Vortex Competition'}${meet?.meet_date ? ' · ' + meet.meet_date : ''}`), 210 - M, 14, { align: 'right' })
     if (first) {
       doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(22)
       doc.text('People & photos', M, 38)

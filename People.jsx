@@ -142,7 +142,7 @@ export default function People({ data, people }) {
           )}
           {view !== 'clubs' && <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <input className="input" style={{ width: 220 }} placeholder="Search name, role, club" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search people" />
-            <button className="btn sm primary" onClick={printBadges} disabled={!!busy || !rows.length}>
+            <button className="btn sm primary" onClick={() => printBadges()} disabled={!!busy || !rows.length}>
               {busy === 'badges' ? 'Building badges…' : `Print badges (${chosen.length || rows.length})`}
             </button>
           </div>}
