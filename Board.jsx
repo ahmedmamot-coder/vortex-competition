@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import logoH from './logo-horizontal.svg'
+import logoH from './logo-competition.svg'
 import { useMeet } from './useMeet.js'
 import { usePeople } from './photos.jsx'
 
@@ -33,7 +33,7 @@ export default function Board() {
   return (
     <div className="board vx-page">
       <div className="board-head">
-        <img src={logoH} alt="Vortex Swimming Club" />
+        <img src={logoH} alt="Vortex International Championships 2026" />
         <div style={{ textAlign: 'right' }}>
           <div className="eyebrow" style={{ fontSize: 'clamp(14px, 1.3vw, 22px)' }}>Call room</div>
           <div className="muted" style={{ fontSize: 'clamp(13px, 1.1vw, 20px)', fontWeight: 600 }}>{meet?.name}</div>

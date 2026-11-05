@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import logoH from './logo-horizontal.svg'
+import logoH from './logo-competition.svg'
 import { supabase } from './supabase.js'
 import { processPhoto, uploadPhoto } from './photos.jsx'
 
@@ -33,7 +33,7 @@ export default function ClubPortal() {
     <div className="vx-page">
       <header style={{ borderBottom: '1px solid var(--line)' }}>
         <div className="wrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, paddingTop: 16, paddingBottom: 16, flexWrap: 'wrap' }}>
-          <img src={logoH} alt="Vortex Swimming Club" style={{ height: 40 }} />
+          <img src={logoH} alt="Vortex International Championships 2026" style={{ height: 60 }} />
           {data && <div className="small muted" style={{ textAlign: 'right' }}>{data.meet?.name}{data.meet?.venue ? ` · ${data.meet.venue}` : ''}{data.meet?.meet_date ? ` · ${data.meet.meet_date}` : ''}</div>}
         </div>
       </header>

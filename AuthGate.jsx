@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import logoH from './logo-horizontal.svg'
+import logoH from './logo-competition.svg'
 import { supabase } from './supabase.js'
 
 export default function AuthGate({ children }) {
@@ -25,7 +25,7 @@ export default function AuthGate({ children }) {
     return (
       <div className="center-page vx-page">
         <div className="auth-card">
-          <img src={logoH} alt="Vortex Swimming Club" style={{ height: 48, alignSelf: 'flex-start' }} />
+          <img src={logoH} alt="Vortex International Championships 2026" style={{ height: 76, alignSelf: 'flex-start' }} />
           <h1 style={{ fontSize: 24 }}>No access yet</h1>
           <p className="muted" style={{ margin: 0 }}>
             {session.user.email} is signed in but is not on the meet organizer list. Ask the meet manager to add this email in Setup → Organizer access.
@@ -60,7 +60,7 @@ function Login() {
   return (
     <div className="center-page vx-page">
       <form className="auth-card" onSubmit={submit}>
-        <img src={logoH} alt="Vortex Swimming Club" style={{ height: 48, alignSelf: 'flex-start' }} />
+        <img src={logoH} alt="Vortex International Championships 2026" style={{ height: 76, alignSelf: 'flex-start' }} />
         <div>
           <div className="eyebrow blue">Vortex Competition</div>
           <h1 style={{ fontSize: 26, marginTop: 4 }}>{mode === 'signin' ? 'Organizer sign in' : 'Create organizer account'}</h1>

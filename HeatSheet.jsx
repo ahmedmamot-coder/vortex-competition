@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import logoH from './logo-horizontal.svg'
+import logoH from './logo-competition.svg'
 import { useMeet } from './useMeet.js'
 import { Avatar, usePeople } from './photos.jsx'
 
@@ -30,7 +30,7 @@ export default function HeatSheet() {
   return (
     <div className="hs">
       <div className="hs-controls no-print">
-        <img src={logoH} alt="Vortex Swimming Club" style={{ height: 36 }} />
+        <img src={logoH} alt="Vortex International Championships 2026" style={{ height: 36 }} />
         <select className="input" style={{ width: 'auto', minWidth: 220 }} value={ev} onChange={(e) => setEv(e.target.value)} aria-label="Event">
           <option value="all">All events</option>
           {events.map((e) => <option key={e.id} value={String(e.event_no)}>#{e.event_no} {e.name}</option>)}

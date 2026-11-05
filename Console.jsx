@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import logoH from './logo-horizontal.svg'
+import logoH from './logo-competition.svg'
 import { supabase } from './supabase.js'
 import { useMeet } from './useMeet.js'
 import CallRoom from './CallRoom.jsx'
@@ -47,7 +47,7 @@ export default function Console() {
       <header className="topbar">
         <div className="wrap">
           <div className="brand">
-            <img src={logoH} alt="Vortex Swimming Club" />
+            <img src={logoH} alt="Vortex International Championships 2026" />
             <div className="divider" />
             <div className="meet-txt">
               <div className="meet-name">{meet?.name || 'Vortex Competition'}</div>
