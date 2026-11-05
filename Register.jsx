@@ -4,7 +4,7 @@ import { supabase } from './supabase.js'
 import { BANKS, SESSIONS, maskQid } from './lib.js'
 import { PhotoPicker, uploadPhoto } from './photos.jsx'
 
-const EMPTY = { full_name: '', qid: '', mobile: '', email: '', bank_name: '', account_holder: '', fawran_mobile: '', fawran_same: true, position: '', sessions: [], consent: false, marketing: false, photo: null }
+const EMPTY = { full_name: '', qid: '', mobile: '', email: '', bank_name: '', account_holder: '', fawran_mobile: '', fawran_same: true, position: '', consent: false, marketing: false, photo: null }
 
 export default function Register() {
   const [meet, setMeet] = useState(null)
@@ -38,7 +38,7 @@ export default function Register() {
     if (!v.consent) e.consent = 'Please confirm to continue.'
     return e
   }
-  // Functional update so quick taps (position, then sessions) never overwrite each other.
+  // Functional update so quick taps (position, then consent) never overwrite each other.
   function set(k, val) {
     setF((prev) => {
       const next = { ...prev, [k]: typeof val === 'function' ? val(prev[k]) : val }
@@ -70,7 +70,7 @@ export default function Register() {
       account_holder: f.account_holder.trim() || null,
       fawran_mobile: f.fawran_same ? f.mobile : f.fawran_mobile,
       position: f.position,
-      sessions: f.sessions,
+      sessions: SESSIONS.map((s) => s.id),
       consent: true,
       marketing_consent: f.marketing,
       photo_path
@@ -182,20 +182,10 @@ export default function Register() {
             {errors.position && <span className="err-text">{errors.position}</span>}
           </fieldset>
 
-          <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-            <legend className="label" style={{ padding: 0, marginBottom: 10 }}>Sessions you are available</legend>
-            <div className="sessions">
-              {SESSIONS.map((s) => {
-                const on = f.sessions.includes(s.id)
-                return (
-                  <button type="button" key={s.id} className="session" aria-pressed={on} onClick={() => set('sessions', (cur) => (cur.includes(s.id) ? cur.filter((x) => x !== s.id) : [...cur, s.id]))}>
-                    <div style={{ fontWeight: 800, fontSize: 13.5 }}>{s.name}</div>
-                    <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 500 }}>{s.time}</div>
-                  </button>
-                )
-              })}
-            </div>
-          </fieldset>
+          <div className="notice" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <span aria-hidden="true" style={{ fontWeight: 800, color: 'var(--blue)' }}>i</span>
+            <span><strong>All staff work both days of the meet</strong>{meet?.meet_date ? ` (${meet.meet_date})` : ''}.</span>
+          </div>
 
           <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5, color: 'var(--ink-2)', cursor: 'pointer' }} data-err={errors.consent ? 'true' : undefined}>
             <input type="checkbox" checked={f.consent} onChange={(e) => set('consent', e.target.checked)} style={{ width: 20, height: 20, margin: '1px 0 0', accentColor: '#1f23c9', flex: 'none' }} />

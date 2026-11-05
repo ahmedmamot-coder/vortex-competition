@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from './supabase.js'
-import { SESSIONS, download, maskQid, toCsv } from './lib.js'
+import { download, maskQid, toCsv } from './lib.js'
 
 const FILTERS = ['all', 'pending', 'approved', 'declined']
 const initials = (name = '') => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?'
@@ -14,7 +14,6 @@ export default function Applications({ data }) {
 
   const list = apps.filter((a) => (filter === 'all' || a.status === filter) && (!pos || a.position === pos))
   const regLink = `${window.location.origin}/register`
-  const sessionName = (id) => SESSIONS.find((s) => s.id === id)?.name || id
 
   async function setStatus(a, status) {
     data.setApps((xs) => xs.map((x) => (x.id === a.id ? { ...x, status } : x)))
@@ -25,8 +24,8 @@ export default function Applications({ data }) {
     await supabase.from('vc_applications').update({ position }).eq('id', a.id)
   }
   function exportApproved() {
-    const rows = [['Full name', 'QID', 'Mobile', 'Email', 'Position', 'Bank', 'Account holder', 'Fawran mobile', 'Sessions']]
-    apps.filter((a) => a.status === 'approved').forEach((a) => rows.push([a.full_name, a.qid, '+974' + a.mobile, a.email, a.position, a.bank_name, a.account_holder, a.fawran_mobile ? '+974' + a.fawran_mobile : '', (a.sessions || []).map(sessionName).join(' / ')]))
+    const rows = [['Full name', 'QID', 'Mobile', 'Email', 'Position', 'Bank', 'Account holder', 'Fawran mobile']]
+    apps.filter((a) => a.status === 'approved').forEach((a) => rows.push([a.full_name, a.qid, '+974' + a.mobile, a.email, a.position, a.bank_name, a.account_holder, a.fawran_mobile ? '+974' + a.fawran_mobile : '']))
     download('vortex-competition-approved-staff.csv', toCsv(rows))
   }
   async function copyLink() {
@@ -64,10 +63,10 @@ export default function Applications({ data }) {
       <div className="table">
         <table style={{ minWidth: 1040 }}>
           <thead>
-            <tr><th>Full name</th><th>QID</th><th>Bank / Fawran</th><th>Position</th><th>Sessions</th><th>Status</th><th style={{ textAlign: 'right' }}>Decision</th></tr>
+            <tr><th>Full name</th><th>QID</th><th>Bank / Fawran</th><th>Position</th><th>Status</th><th style={{ textAlign: 'right' }}>Decision</th></tr>
           </thead>
           <tbody>
-            {list.length === 0 && <tr><td colSpan={7} className="empty">No applications here yet. Share the registration link with interested staff.</td></tr>}
+            {list.length === 0 && <tr><td colSpan={6} className="empty">No applications here yet. Share the registration link with interested staff.</td></tr>}
             {list.map((a) => {
               const show = revealed[a.id]
               return (
@@ -94,7 +93,6 @@ export default function Applications({ data }) {
                       {positions.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
                     </select>
                   </td>
-                  <td className="small">{(a.sessions || []).map(sessionName).join(', ') || '—'}</td>
                   <td><span className={`chip status ${a.status === 'approved' ? 'ok' : a.status === 'declined' ? 'declined' : 'warn'}`}>{a.status}</span></td>
                   <td>
                     <div className="actions">
