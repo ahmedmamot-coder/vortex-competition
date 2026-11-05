@@ -239,7 +239,7 @@ export default function TV() {
   }
 
   return (
-    <div className="tv" onMouseMove={() => setShowControls(true)}>
+    <div className="tv vx-page" onMouseMove={() => setShowControls(true)}>
       <header className="tv-head">
         <img src={logoH} alt="Vortex Swimming Club" />
         <div className="tv-title">

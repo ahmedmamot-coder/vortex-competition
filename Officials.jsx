@@ -19,8 +19,8 @@ export default function Officials({ data }) {
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }} aria-label="Officials and positions">
-      <div>
-        <h2 style={{ fontSize: 24 }}>Officials &amp; positions</h2>
+      <div className="section-head">
+        <h2>Officials &amp; positions</h2>
         <p className="muted" style={{ margin: '4px 0 0' }}>Required crew against approved staff. Change the number needed in each card; approving an application fills its position.</p>
       </div>
       {groups.map((g) => (

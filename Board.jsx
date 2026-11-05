@@ -31,7 +31,7 @@ export default function Board() {
   const stageBg = stage === 3 ? '#b4461a' : stage === 0 ? '#4a4f6e' : '#1f23c9'
 
   return (
-    <div className="board">
+    <div className="board vx-page">
       <div className="board-head">
         <img src={logoH} alt="Vortex Swimming Club" />
         <div style={{ textAlign: 'right' }}>

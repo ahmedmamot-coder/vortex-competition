@@ -115,8 +115,8 @@ export default function People({ data, people }) {
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 20 }} aria-label="People and photos">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h2 style={{ fontSize: 24 }}>People &amp; photos</h2>
+        <div className="section-head">
+          <h2>People &amp; photos</h2>
           <p className="muted small" style={{ margin: '4px 0 0' }}>{apps.filter((a) => a.status === 'approved').length} approved staff · {swimmers.length} registered swimmers · photos are private to organizers</p>
         </div>
         <div className="actions">

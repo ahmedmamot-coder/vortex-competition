@@ -18,12 +18,12 @@ export default function AuthGate({ children }) {
   }, [session])
 
   if (session === undefined || (session && isAdmin === null)) {
-    return <div className="center-page muted">Loading…</div>
+    return <div className="center-page vx-page muted">Loading…</div>
   }
   if (!session) return <Login />
   if (!isAdmin) {
     return (
-      <div className="center-page">
+      <div className="center-page vx-page">
         <div className="auth-card">
           <img src={logoH} alt="Vortex Swimming Club" style={{ height: 48, alignSelf: 'flex-start' }} />
           <h1 style={{ fontSize: 24 }}>No access yet</h1>
@@ -58,7 +58,7 @@ function Login() {
   }
 
   return (
-    <div className="center-page">
+    <div className="center-page vx-page">
       <form className="auth-card" onSubmit={submit}>
         <img src={logoH} alt="Vortex Swimming Club" style={{ height: 48, alignSelf: 'flex-start' }} />
         <div>
