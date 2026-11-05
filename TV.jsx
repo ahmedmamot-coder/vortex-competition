@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import logoH from './logo-horizontal.svg'
+import logoH from './logo-competition.svg'
 import { supabase } from './supabase.js'
 import { heatCode, isArabic, speechForHeat } from './lib.js'
 
@@ -241,7 +241,7 @@ export default function TV() {
   return (
     <div className="tv vx-page" onMouseMove={() => setShowControls(true)}>
       <header className="tv-head">
-        <img src={logoH} alt="Vortex Swimming Club" />
+        <img src={logoH} alt="Vortex International Championships 2026" />
         <div className="tv-title">
           <div className="tv-meet">{meet?.name || 'Vortex Competition'}</div>
           <div className="tv-sub">Call room · نداء السباحين</div>

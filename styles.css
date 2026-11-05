@@ -26,7 +26,7 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .topbar { border-bottom: 1px solid var(--line); background: #fff; position: sticky; top: 0; z-index: 5; }
 .topbar .wrap { padding-top: 14px; padding-bottom: 14px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
 .brand { display: flex; align-items: center; gap: 16px; min-width: 0; }
-.brand img { height: 40px; width: auto; display: block; }
+.brand img { height: 58px; width: auto; display: block; }
 .brand .divider { width: 1px; height: 36px; background: var(--line); }
 .brand .meet-name { font-weight: 800; font-size: 16px; }
 .brand .meet-sub { font-size: 13px; color: var(--muted); }

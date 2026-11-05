@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import logoH from './logo-horizontal.svg'
+import logoH from './logo-competition.svg'
 import { supabase } from './supabase.js'
 import { PhotoPicker, uploadPhoto } from './photos.jsx'
 
@@ -73,7 +73,7 @@ export default function SwimmerRegister() {
     <div className="vx-page">
       <header style={{ borderBottom: '1px solid var(--line)' }}>
         <div className="form-page" style={{ paddingTop: 18, paddingBottom: 18 }}>
-          <img src={logoH} alt="Vortex Swimming Club" style={{ height: 44, alignSelf: 'flex-start' }} />
+          <img src={logoH} alt="Vortex International Championships 2026" style={{ height: 68, alignSelf: 'flex-start' }} />
         </div>
       </header>
 
