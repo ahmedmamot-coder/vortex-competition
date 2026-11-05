@@ -3,6 +3,7 @@ import { supabase } from './supabase.js'
 import { SESSIONS, download, maskQid, toCsv } from './lib.js'
 
 const FILTERS = ['all', 'pending', 'approved', 'declined']
+const initials = (name = '') => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?'
 
 export default function Applications({ data }) {
   const { apps, positions } = data
@@ -35,9 +36,9 @@ export default function Applications({ data }) {
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 18 }} aria-label="Staff applications">
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
-        <div>
-          <h2 style={{ fontSize: 24 }}>Staff applications</h2>
-          <p className="muted" style={{ margin: '4px 0 0' }}>QID is masked — press Show to see the full details.</p>
+        <div className="section-head">
+          <h2>Staff applications</h2>
+          <p className="muted" style={{ margin: '4px 0 0' }}>QID is masked — press Show details to reveal it.</p>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <button className="btn sm dark" onClick={copyLink}>{copied ? 'Link copied' : 'Copy registration link'}</button>
@@ -72,15 +73,20 @@ export default function Applications({ data }) {
               return (
                 <tr key={a.id}>
                   <td>
-                    <div style={{ fontWeight: 700 }}>{a.full_name}</div>
-                    <div className="small muted">+974 {a.mobile}{a.email ? ` · ${a.email}` : ''}</div>
-                    <div className="small muted">{new Date(a.created_at).toLocaleString()}</div>
+                    <div className="applicant">
+                      <span className="avatar" aria-hidden="true">{initials(a.full_name)}</span>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{a.full_name}</div>
+                        <div className="small muted">+974 {a.mobile}{a.email ? ` · ${a.email}` : ''}</div>
+                        <div className="small muted">{new Date(a.created_at).toLocaleString()}</div>
+                      </div>
+                    </div>
                   </td>
-                  <td className="num">{show ? a.qid : maskQid(a.qid)}</td>
+                  <td><span className="num qid">{show ? a.qid : maskQid(a.qid)}</span></td>
                   <td>
                     <div className="small" style={{ fontWeight: 600 }}>{a.bank_name}{a.account_holder ? ` · ${a.account_holder}` : ''}</div>
                     <div className="num small">Fawran: {a.fawran_mobile ? `+974 ${a.fawran_mobile}` : '—'}</div>
-                    <button className="btn sm" style={{ minHeight: 28, marginTop: 4 }} onClick={() => setRevealed((r) => ({ ...r, [a.id]: !show }))}>{show ? 'Hide' : 'Show'}</button>
+                    <button className="link-btn" onClick={() => setRevealed((r) => ({ ...r, [a.id]: !show }))}>{show ? 'Hide details' : 'Show details'}</button>
                   </td>
                   <td>
                     <select className="input" aria-label="Position" style={{ minHeight: 36, minWidth: 170 }} value={a.position} onChange={(e) => changePosition(a, e.target.value)}>
@@ -89,11 +95,11 @@ export default function Applications({ data }) {
                     </select>
                   </td>
                   <td className="small">{(a.sessions || []).map(sessionName).join(', ') || '—'}</td>
-                  <td><span className={`chip ${a.status === 'approved' ? 'ok' : a.status === 'declined' ? 'grey' : 'warn'}`}>{a.status}</span></td>
+                  <td><span className={`chip status ${a.status === 'approved' ? 'ok' : a.status === 'declined' ? 'declined' : 'warn'}`}>{a.status}</span></td>
                   <td>
                     <div className="actions">
                       <button className="btn sm primary" disabled={a.status === 'approved'} onClick={() => setStatus(a, 'approved')}>Approve</button>
-                      <button className="btn sm" disabled={a.status === 'declined'} onClick={() => setStatus(a, 'declined')}>Decline</button>
+                      <button className="btn sm danger" disabled={a.status === 'declined'} onClick={() => setStatus(a, 'declined')}>Decline</button>
                     </div>
                   </td>
                 </tr>

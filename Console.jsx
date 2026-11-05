@@ -43,7 +43,7 @@ export default function Console() {
   }
 
   return (
-    <div>
+    <div className="console">
       <header className="topbar">
         <div className="wrap">
           <div className="brand">
@@ -109,7 +109,7 @@ export default function Console() {
         )}
 
         {meet?.sponsor_banner && (
-          <footer style={{ borderTop: '1px solid var(--line)', paddingTop: 20, display: 'flex', justifyContent: 'center' }}>
+          <footer className="sponsors">
             <img src={meet.sponsor_banner} alt="Meet sponsors" style={{ maxWidth: '100%', maxHeight: 80, objectFit: 'contain' }} />
           </footer>
         )}
