@@ -155,26 +155,23 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
     if (p.id) doc.text(`ID ${String(p.id).slice(0, 8).toUpperCase()}`, x + W - 5, y + H - 3, { align: 'right' })
   }
 
-  for (let start = 0; start < people.length; start += 4) {
+  // With back sides: each row is one pass, front on the left and its back on the
+  // right (2 passes per A4 sheet) — cut out the pair and fold on the middle line.
+  // Without: 4 fronts per sheet.
+  const paired = backs && people.some((p) => art[p.pass]?.back)
+  const per = paired ? 2 : 4
+  for (let start = 0; start < people.length; start += per) {
     if (start) doc.addPage()
-    const group = people.slice(start, start + 4)
+    const group = people.slice(start, start + per)
     group.forEach((p, k) => {
-      const x = (k % 2) * W, y = Math.floor(k / 2) * H
+      const x = paired ? 0 : (k % 2) * W
+      const y = paired ? k * H : Math.floor(k / 2) * H
       if (p.pass && art[p.pass]) drawPass(p, photos[start + k], x, y)
       else drawClassic(p, photos[start + k], x, y)
+      const b = paired && art[p.pass]?.back
+      if (b) doc.addImage(b, 'JPEG', W, y, W, H, `back-${p.pass}`, 'FAST')
     })
     guides()
-    // Back sides on the next sheet, mirrored left/right for long-edge double-sided printing.
-    if (backs && group.some((p) => art[p.pass]?.back)) {
-      doc.addPage()
-      group.forEach((p, k) => {
-        const b = art[p.pass]?.back
-        if (!b) return
-        const x = (1 - (k % 2)) * W, y = Math.floor(k / 2) * H
-        doc.addImage(b, 'JPEG', x, y, W, H, `back-${p.pass}`, 'FAST')
-      })
-      guides()
-    }
   }
   return doc
 }

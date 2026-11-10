@@ -63,7 +63,7 @@ export default function Passes({ data, people, passDesigns }) {
       const { badgesPdf } = await import('./pdfout.js')
       const doc = await badgesPdf({ people: list, meet, designs, backs, onProgress: (n, t) => setNote(`Preparing ${n} / ${t}…`) })
       doc.save(`vic-passes-${kinds.length > 1 ? 'all' : kinds[0]}-${new Date().toISOString().slice(0, 10)}.pdf`)
-      setNote(`Passes PDF downloaded: ${list.length} pass${list.length === 1 ? '' : 'es'}, 4 per A4 sheet (A6, cut on the dotted lines)${backs ? ', each front sheet followed by its back sheet for double-sided printing (flip on long edge)' : ''}.${noArt.length ? ` No artwork yet for ${noArt.map((k) => PASS[k].label).join(', ')} — those use the plain Vortex badge.` : ''}`)
+      setNote(`Passes PDF downloaded: ${list.length} pass${list.length === 1 ? '' : 'es'}, A6 size, cut on the dotted lines${backs ? ', each pass with its back side right beside it (2 per A4 sheet — cut out the pair and fold in the middle)' : ''}.${noArt.length ? ` No artwork yet for ${noArt.map((k) => PASS[k].label).join(', ')} — those use the plain Vortex badge.` : ''}`)
     } catch (x) { setNote(`Could not make the passes: ${x.message}`) }
     setBusy('')
   }
@@ -92,7 +92,7 @@ export default function Passes({ data, people, passDesigns }) {
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input type="checkbox" checked={backs} onChange={(e) => setBacks(e.target.checked)} style={{ accentColor: '#1f23c9' }} /> Include back sides
+              <input type="checkbox" checked={backs} onChange={(e) => setBacks(e.target.checked)} style={{ accentColor: '#1f23c9' }} /> Back side next to each pass
             </label>
             <button className="btn sm" disabled={!!busy} onClick={() => print(PASS_TYPES.map((t) => t.id).filter((k) => k !== 'swimmer'))}>Print all passes</button>
             <button className="btn sm primary" disabled={!!busy} onClick={() => print([cat])}>{busy ? 'Building…' : `Print ${info.label} passes (${list.length + (blank[cat] || 0)})`}</button>
@@ -168,7 +168,7 @@ function Designs({ designs, reload }) {
           <div className="small muted">Upload the pass design pictures (coach-front.jpg, coach-back.jpg, vip-front.jpg …) — select them all at once. They are sorted into categories by file name. PDFs also work, but some browsers (Safari) draw them wrongly, so pictures are safer.</div>
         </div>
         <button className="btn sm dark" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? 'Working…' : 'Upload designs'}</button>
-        <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png" multiple onChange={pick} style={{ display: 'none' }} />
+        <input ref={fileRef} type="file" accept="application/pdf,image/*,.jpg,.jpeg,.png" multiple onChange={pick} style={{ display: 'none' }} />
       </div>
       {msg && <div className="notice">{msg}</div>}
 

@@ -7,9 +7,12 @@ import TV from './TV.jsx'
 import SwimmerRegister from './SwimmerRegister.jsx'
 import HeatSheet from './HeatSheet.jsx'
 import ClubPortal from './ClubPortal.jsx'
+import UpdateBanner from './UpdateBanner.jsx'
 
 export default function App() {
   return (
+    <>
+    <UpdateBanner />
     <Routes>
       <Route path="/register" element={<Register />} />
       <Route path="/tv" element={<TV />} />
@@ -20,5 +23,6 @@ export default function App() {
       <Route path="/" element={<AuthGate><Console /></AuthGate>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }
