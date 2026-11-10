@@ -45,6 +45,12 @@ export default function Passes({ data, people, passDesigns }) {
   }, [apps, holders, posByName, urls, holderUrls])
 
   async function print(kinds) {
+    // Never fall back to the plain badge for these passes: the marketing artwork is required.
+    const missing = kinds.filter((k) => k !== 'swimmer' && !designs[k]?.front && (byCat[k].length || blank[k]))
+    if (missing.length) {
+      setNote(`The ${missing.map((k) => PASS[k].label).join(', ')} pass design is not in the app yet. Click “Upload design PDF” above, choose your pass PDFs, then “Save designs” — and print again.`)
+      return
+    }
     const list = []
     kinds.forEach((k) => {
       list.push(...byCat[k])
@@ -67,6 +73,12 @@ export default function Passes({ data, people, passDesigns }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {PASS_TYPES.some((t) => t.id !== 'swimmer' && !designs[t.id]?.front) && (
+        <div className="notice error">
+          Pass designs missing: {PASS_TYPES.filter((t) => t.id !== 'swimmer' && !designs[t.id]?.front).map((t) => t.label).join(', ')}.
+          Upload the marketing PDFs below first — passes without their design cannot be printed.
+        </div>
+      )}
       <Designs designs={designs} reload={reloadDesigns} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

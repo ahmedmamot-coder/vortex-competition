@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 import { Avatar, processPhoto, uploadPhoto } from './photos.jsx'
 import Passes from './Passes.jsx'
-import { passForPosition, usePassDesigns } from './passes.js'
+import { PASS, passForPosition, usePassDesigns } from './passes.js'
 
 const PALETTE = ['#121236', '#1F23C9', '#3A7BE0', '#0E7C66', '#7A3FC2', '#B4461A', '#A1185A', '#4A4F6E']
 export const ATHLETE_COLOR = '#B4461A'
@@ -87,6 +87,11 @@ export default function People({ data, people }) {
   async function printBadges(override, label) {
     const list = override || (chosen.length ? chosen : rows)
     if (!list.length) return
+    const noArt = [...new Set(list.map((p) => p.pass).filter((k) => k && k !== 'swimmer' && !passDesigns.designs[k]?.front))]
+    if (noArt.length) {
+      setNote(`Upload the pass designs first (People & Photos → Passes → Upload design PDF). Missing: ${noArt.map((k) => PASS[k]?.label || k).join(', ')}.`)
+      return
+    }
     setBusy('badges'); setNote('')
     try {
       const { badgesPdf } = await import('./pdfout.js')
