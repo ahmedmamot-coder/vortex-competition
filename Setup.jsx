@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase.js'
 import { parseCsv } from './lib.js'
+import Sponsors from './Sponsors.jsx'
 
 const SAMPLE = `event_no,event_name,heat_no,lane,swimmer_name,club,seed_time
 1,Girls 11-12 50m Freestyle,1,3,Swimmer Name,Vortex Aquatics,0:34.20
@@ -162,31 +163,12 @@ export default function Setup({ data }) {
       const lanes = pdfResult.rows.map((x) => x[3])
       const patch = { lanes: Math.min(10, Math.max(4, Math.max(...lanes) - Math.min(...lanes) + 1)) }
       if (useTitle && pdfResult.title) { patch.name = titleCase(pdfResult.title); if (pdfResult.dates) patch.meet_date = pdfResult.dates }
-      if (pdfResult.sponsor && pdfResult.useSponsor !== false) patch.sponsor_banner = pdfResult.sponsor
+      if (pdfResult.sponsor && pdfResult.useSponsor !== false) { patch.sponsor_banner = pdfResult.sponsor; patch.sponsors = null }
       await supabase.from('vc_meet').update(patch).eq('id', meet.id)
       say('ok', `Imported ${r.entries} entries across ${r.heats} heats and ${r.events} events${patch.sponsor_banner ? ', plus the sponsor banner' : ''}.`)
       setPdfResult(null)
     } catch (err) { say('error', err.message) }
     setBusy(false)
-    data.reload()
-  }
-
-  // Sponsor banner
-  async function onSponsorFile(e) {
-    const f = e.target.files?.[0]
-    e.target.value = ''
-    if (!f) return
-    try {
-      const { imageFileToDataUrl } = await import('./heatsheet.js')
-      const url = await imageFileToDataUrl(f)
-      const { error } = await supabase.from('vc_meet').update({ sponsor_banner: url }).eq('id', meet.id)
-      if (error) say('error', error.message); else say('ok', 'Sponsor banner updated.')
-    } catch (err) { say('error', `Could not read the image: ${err.message}`) }
-    data.reload()
-  }
-  async function removeSponsor() {
-    if (!window.confirm('Remove the sponsor banner?')) return
-    await supabase.from('vc_meet').update({ sponsor_banner: null }).eq('id', meet.id)
     data.reload()
   }
 
@@ -344,19 +326,7 @@ export default function Setup({ data }) {
             <button className="btn" style={{ alignSelf: 'flex-start' }} disabled={busy || !csv.trim()} onClick={importCsv}>{busy ? 'Importing…' : 'Import CSV rows'}</button>
           </div>
 
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-              <h2 style={{ fontSize: 18 }}>Sponsor banner</h2>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <label className="btn sm" style={{ cursor: 'pointer' }}>Upload image<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={onSponsorFile} style={{ display: 'none' }} /></label>
-                {meet.sponsor_banner && <button className="btn sm danger" onClick={removeSponsor}>Remove</button>}
-              </div>
-            </div>
-            <p className="small muted" style={{ margin: 0 }}>Shown on the staff registration form, the call room screen and the console. Comes from the heat sheet PDF automatically, or upload a logo strip.</p>
-            {meet.sponsor_banner
-              ? <img src={meet.sponsor_banner} alt="Current sponsor banner" style={{ maxWidth: '100%', maxHeight: 110, objectFit: 'contain', alignSelf: 'flex-start' }} />
-              : <div className="small muted">No sponsor banner yet.</div>}
-          </div>
+          <Sponsors meet={meet} reload={data.reload} say={say} />
         </div>
       </div>
 
