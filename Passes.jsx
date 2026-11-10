@@ -68,6 +68,31 @@ export default function Passes({ data, people, passDesigns }) {
     setBusy('')
   }
 
+  // One PDF per pass type (front + back of each pass), in this order.
+  const ORDER = ['organizer', 'coach', 'vip', 'vvip', 'media', 'officials']
+  async function printEach() {
+    const kinds = ORDER.filter((k) => byCat[k].length || blank[k])
+    if (!kinds.length) { setNote('Nobody has a pass yet. Add people to a category first.'); return }
+    const missing = kinds.filter((k) => !designs[k]?.front)
+    if (missing.length) { setNote(`The ${missing.map((k) => PASS[k].label).join(', ')} pass design is not in the app yet. Upload the design pictures above first.`); return }
+    setBusy('print'); setNote('')
+    const done = []
+    try {
+      const { badgesPdf } = await import('./pdfout.js')
+      for (const k of kinds) {
+        const list = [...byCat[k]]
+        for (let i = 0; i < (blank[k] || 0); i++) list.push({ key: `b-${k}-${i}`, name: '', pass: k })
+        setNote(`Making the ${PASS[k].label} file…`)
+        const doc = await badgesPdf({ people: list, meet, designs, backs })
+        doc.save(`VIC26-${PASS[k].label.replace(/[^A-Za-z]+/g, '-')}-passes.pdf`)
+        done.push(`${PASS[k].label} (${list.length})`)
+        await new Promise((r) => setTimeout(r, 700))
+      }
+      setNote(`Downloaded ${done.length} file${done.length === 1 ? '' : 's'}, one per pass type: ${done.join(', ')}. If your browser asks, allow multiple downloads.`)
+    } catch (x) { setNote(`Could not make the passes: ${x.message}`) }
+    setBusy('')
+  }
+
   const info = PASS[cat]
   const list = byCat[cat] || []
 
@@ -94,7 +119,7 @@ export default function Passes({ data, people, passDesigns }) {
             <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="checkbox" checked={backs} onChange={(e) => setBacks(e.target.checked)} style={{ accentColor: '#1f23c9' }} /> Back side next to each pass
             </label>
-            <button className="btn sm" disabled={!!busy} onClick={() => print(PASS_TYPES.map((t) => t.id).filter((k) => k !== 'swimmer'))}>Print all passes</button>
+            <button className="btn sm" disabled={!!busy} onClick={printEach}>Print all — one file per pass type</button>
             <button className="btn sm primary" disabled={!!busy} onClick={() => print([cat])}>{busy ? 'Building…' : `Print ${info.label} passes (${list.length + (blank[cat] || 0)})`}</button>
           </div>
         </div>
