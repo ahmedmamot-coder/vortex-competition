@@ -8,8 +8,8 @@ export const PASS_TYPES = [
   { id: 'vvip', label: 'VVIP', photo: false, accent: '#F2A541' },
   { id: 'vip', label: 'VIP', photo: false, accent: '#F2A541' },
   { id: 'coach', label: 'Coaches', one: 'Coach', photo: true, accent: '#6F8CFF' },
-  { id: 'media', label: 'Media', photo: true, accent: '#6F8CFF' },
-  { id: 'organizer', label: 'Organizers', one: 'Organizer', photo: true, accent: '#6F8CFF' },
+  { id: 'media', label: 'Media', photo: false, accent: '#6F8CFF' },
+  { id: 'organizer', label: 'Organizers', one: 'Organizer', photo: false, accent: '#6F8CFF' },
   { id: 'officials', label: 'Officials (judges)', one: 'Official', photo: false, accent: '#6F8CFF' },
   { id: 'swimmer', label: 'Swimmers', one: 'Swimmer', photo: true, accent: '#6F8CFF' }
 ]
@@ -76,6 +76,27 @@ export async function readPassPdf(file) {
     else if (p.kind) open.push(p.kind)
   })
   return pages
+}
+
+// Ready-made design images named like "coach-front.jpg" or "vip-back.png".
+// Preferred over PDFs: some browsers (Safari) cannot draw the PDF's transparent
+// effects, so the artwork is best rendered once and uploaded as pictures.
+export async function readPassImage(file) {
+  const n = file.name.toLowerCase()
+  const kind = (n.match(/vvip|vip|coach|media|organi[sz]er|officials?|swimmer/) || [])[0]
+  const id = kind && (kind.startsWith('organi') ? 'organizer' : kind.startsWith('official') ? 'officials' : kind)
+  const side = /back/.test(n) ? 'back' : 'front'
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await loadImg(url)
+    const c = document.createElement('canvas')
+    c.width = 1240; c.height = Math.round(1240 * img.naturalHeight / img.naturalWidth)
+    const ctx = c.getContext('2d')
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, c.width, c.height)
+    ctx.drawImage(img, 0, 0, c.width, c.height)
+    const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.92))
+    return { page: 1, file: file.name, kind: side === 'back' ? 'back' : id || null, backFor: side === 'back' && id ? [id] : undefined, blob, preview: c.toDataURL('image/jpeg', 0.5) }
+  } finally { URL.revokeObjectURL(url) }
 }
 
 export async function saveDesign(kind, side, blob) {

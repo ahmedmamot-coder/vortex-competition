@@ -89,7 +89,7 @@ export default function People({ data, people }) {
     if (!list.length) return
     const noArt = [...new Set(list.map((p) => p.pass).filter((k) => k && k !== 'swimmer' && !passDesigns.designs[k]?.front))]
     if (noArt.length) {
-      setNote(`Upload the pass designs first (People & Photos → Passes → Upload design PDF). Missing: ${noArt.map((k) => PASS[k]?.label || k).join(', ')}.`)
+      setNote(`Upload the pass designs first (People & Photos → Passes → Upload designs). Missing: ${noArt.map((k) => PASS[k]?.label || k).join(', ')}.`)
       return
     }
     setBusy('badges'); setNote('')

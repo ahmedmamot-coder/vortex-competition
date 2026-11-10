@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 import { Avatar, processPhoto, uploadPhoto } from './photos.jsx'
-import { PASS, PASS_TYPES, passForPosition, readPassPdf, removeDesign, saveDesign } from './passes.js'
+import { PASS, PASS_TYPES, passForPosition, readPassImage, readPassPdf, removeDesign, saveDesign } from './passes.js'
 
 // Accreditation passes: the marketing artwork per category, who holds which pass,
 // and printing (4 per A4, optional back sides for double-sided printing).
@@ -48,7 +48,7 @@ export default function Passes({ data, people, passDesigns }) {
     // Never fall back to the plain badge for these passes: the marketing artwork is required.
     const missing = kinds.filter((k) => k !== 'swimmer' && !designs[k]?.front && (byCat[k].length || blank[k]))
     if (missing.length) {
-      setNote(`The ${missing.map((k) => PASS[k].label).join(', ')} pass design is not in the app yet. Click “Upload design PDF” above, choose your pass PDFs, then “Save designs” — and print again.`)
+      setNote(`The ${missing.map((k) => PASS[k].label).join(', ')} pass design is not in the app yet. Click “Upload designs” above, choose the design pictures, then “Save designs” — and print again.`)
       return
     }
     const list = []
@@ -76,7 +76,7 @@ export default function Passes({ data, people, passDesigns }) {
       {PASS_TYPES.some((t) => t.id !== 'swimmer' && !designs[t.id]?.front) && (
         <div className="notice error">
           Pass designs missing: {PASS_TYPES.filter((t) => t.id !== 'swimmer' && !designs[t.id]?.front).map((t) => t.label).join(', ')}.
-          Upload the marketing PDFs below first — passes without their design cannot be printed.
+          Upload the design pictures below first — passes without their design cannot be printed.
         </div>
       )}
       <Designs designs={designs} reload={reloadDesigns} />
@@ -140,7 +140,7 @@ function Designs({ designs, reload }) {
     setBusy(true); setMsg('Reading the design files…')
     try {
       const all = []
-      for (const f of files) all.push(...(await readPassPdf(f)))
+      for (const f of files) all.push(...(/pdf$/i.test(f.name) || f.type === 'application/pdf' ? await readPassPdf(f) : [await readPassImage(f)]))
       setPages(all); setMsg('')
     } catch (x) { setMsg(`Could not read the PDF: ${x.message}`) }
     setBusy(false)
@@ -165,10 +165,10 @@ function Designs({ designs, reload }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontWeight: 800, color: 'var(--navy)' }}>Pass designs</div>
-          <div className="small muted">Upload the marketing PDFs (A6, one pass per page). Pages are sorted into categories automatically; a page with the schedule becomes the back side.</div>
+          <div className="small muted">Upload the pass design pictures (coach-front.jpg, coach-back.jpg, vip-front.jpg …) — select them all at once. They are sorted into categories by file name. PDFs also work, but some browsers (Safari) draw them wrongly, so pictures are safer.</div>
         </div>
-        <button className="btn sm dark" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? 'Working…' : 'Upload design PDF'}</button>
-        <input ref={fileRef} type="file" accept="application/pdf" multiple onChange={pick} style={{ display: 'none' }} />
+        <button className="btn sm dark" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? 'Working…' : 'Upload designs'}</button>
+        <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png" multiple onChange={pick} style={{ display: 'none' }} />
       </div>
       {msg && <div className="notice">{msg}</div>}
 
