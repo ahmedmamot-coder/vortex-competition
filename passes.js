@@ -7,7 +7,7 @@ import { BUCKET } from './photos.jsx'
 export const PASS_TYPES = [
   { id: 'vvip', label: 'VVIP', photo: false, accent: '#F2A541' },
   { id: 'vip', label: 'VIP', photo: false, accent: '#F2A541' },
-  { id: 'coach', label: 'Coaches', one: 'Coach', photo: true, accent: '#6F8CFF' },
+  { id: 'coach', label: 'Coaches', one: 'Coach', photo: false, accent: '#6F8CFF' },
   { id: 'media', label: 'Media', photo: false, accent: '#6F8CFF' },
   { id: 'organizer', label: 'Organizers', one: 'Organizer', photo: false, accent: '#6F8CFF' },
   { id: 'officials', label: 'Officials (judges)', one: 'Official', photo: false, accent: '#6F8CFF' },
