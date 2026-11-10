@@ -73,55 +73,109 @@ function photoOrPlaceholder(doc, photo, name, x, y, w, h) {
   doc.text(initials(name) || '?', x + w / 2, y + h / 2, { align: 'center', baseline: 'middle' })
 }
 
-// people: [{ name, photoUrl, role, sub, color, id }]
-export async function badgesPdf({ people, meet, onProgress }) {
+// people: [{ name, photoUrl, role, sub, color, id, pass }]
+// designs: { coach: { front, back }, ... } signed URLs of the pass artwork (optional).
+// Holders whose pass has artwork are printed on it; others get the plain Vortex badge.
+export async function badgesPdf({ people, meet, designs = {}, backs = false, onProgress }) {
   const { jsPDF } = await loadJsPDF()
+  const { PASS, PHOTO_SLOT, LAYOUT, photoTemplate } = await import('./passes.js')
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const logo = await logoPng()
   const sponsor = meet?.sponsor_banner || null
   const sponsorSize = sponsor ? await imgSize(sponsor) : null
-  const photos = await loadPhotos(people, onProgress)
   const W = 105, H = 148.5
 
-  people.forEach((p, i) => {
-    const slot = i % 4
-    if (i && slot === 0) doc.addPage()
-    const x = (slot % 2) * W, y = Math.floor(slot / 2) * H
-    const color = hex(p.color || '#1F23C9')
-
-    // Cut guides
-    if (slot === 0) {
-      doc.setDrawColor(200, 200, 210); doc.setLineWidth(0.15); doc.setLineDashPattern([1.5, 1.5], 0)
-      doc.line(W, 0, W, 297); doc.line(0, H, 210, H); doc.setLineDashPattern([], 0)
+  // Artwork for every pass type in this print run (built once, reused by alias).
+  const art = {}
+  for (const kind of new Set(people.map((p) => p.pass).filter((k) => designs[k]?.front))) {
+    const d = designs[kind]
+    art[kind] = {
+      front: PASS[kind]?.photo ? await photoTemplate(d.front) : await urlToDataUrl(d.front, 1240),
+      back: d.back ? await urlToDataUrl(d.back, 1240) : null
     }
-    // Lanyard slot
+  }
+  const needPhoto = people.map((p) => !p.pass || !art[p.pass] || PASS[p.pass]?.photo)
+  const photos = await loadPhotos(people.map((p, i) => (needPhoto[i] ? p : { ...p, photoUrl: null })), onProgress)
+
+  function guides() {
+    doc.setDrawColor(200, 200, 210); doc.setLineWidth(0.15); doc.setLineDashPattern([1.5, 1.5], 0)
+    doc.line(W, 0, W, 297); doc.line(0, H, 210, H); doc.setLineDashPattern([], 0)
+  }
+  function fitText(text, maxW, size, min) {
+    doc.setFontSize(size)
+    while (size > min && doc.getTextWidth(text) > maxW) { size -= 0.5; doc.setFontSize(size) }
+    return size
+  }
+
+  function drawPass(p, photo, x, y) {
+    const a = art[p.pass], info = PASS[p.pass]
+    doc.addImage(a.front, 'JPEG', x, y, W, H, `pass-${p.pass}`, 'FAST')
+    const accent = hex(info.accent)
+    const name = pdfText(p.name || '')
+    const role = pdfText([p.role, p.sub].filter(Boolean).join('  |  ')).toUpperCase()
+    if (info.photo) {
+      const s = PHOTO_SLOT
+      photoOrPlaceholder(doc, photo, p.name, x + s.x, y + s.y, s.w, s.h)
+      doc.setDrawColor(...accent); doc.setLineWidth(0.6); doc.rect(x + s.x, y + s.y, s.w, s.h)
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold')
+      fitText(name, W - 12, 13, 8)
+      doc.text(name, x + W / 2, y + s.nameY, { align: 'center' })
+      if (role) { doc.setFont('helvetica', 'normal'); doc.setTextColor(...accent); fitText(role, W - 14, 7.5, 5.5); doc.text(role, x + W / 2, y + s.roleY, { align: 'center' }) }
+    } else if (name) {
+      const mid = y + H * (LAYOUT.nameGap[0] + LAYOUT.nameGap[1]) / 2
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold')
+      fitText(name, W - 14, 14, 8)
+      doc.text(name, x + W / 2, mid - (role ? 1 : -1.5), { align: 'center' })
+      if (role) { doc.setFont('helvetica', 'normal'); doc.setTextColor(...accent); fitText(role, W - 16, 7.5, 5.5); doc.text(role, x + W / 2, mid + 4.5, { align: 'center' }) }
+    }
+  }
+
+  function drawClassic(p, photo, x, y) {
+    const color = hex(p.color || '#1F23C9')
     doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.roundedRect(x + W / 2 - 7, y + 4, 14, 3, 1.5, 1.5)
-    // Logo
-    if (logo) { const lw = 38, lh = lw / logo.ratio; doc.addImage(logo.data, 'PNG', x + (W - lw) / 2, y + 9.5, lw, lh, undefined, 'FAST') }
+    if (logo) { const lw = 38, lh = lw / logo.ratio; doc.addImage(logo.data, 'PNG', x + (W - lw) / 2, y + 9.5, lw, lh, 'vc-logo', 'FAST') }
     doc.setTextColor(...MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5)
     doc.text(doc.splitTextToSize(pdfText(meet?.name || 'Vortex Competition').toUpperCase(), W - 16).slice(0, 2), x + W / 2, y + 31.5, { align: 'center' })
-    // Photo
     const pw = 40, ph = 53.3, px = x + (W - pw) / 2, py = y + 37
-    photoOrPlaceholder(doc, photos[i], p.name, px, py, pw, ph)
+    photoOrPlaceholder(doc, photo, p.name, px, py, pw, ph)
     doc.setDrawColor(...color); doc.setLineWidth(0.8); doc.rect(px, py, pw, ph)
-    // Name
     doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold')
     let size = 16
     doc.setFontSize(size)
     let lines = doc.splitTextToSize(p.name, W - 14)
     while (lines.length > 2 && size > 11) { size -= 1; doc.setFontSize(size); lines = doc.splitTextToSize(p.name, W - 14) }
     doc.text(lines.slice(0, 2), x + W / 2, y + 99, { align: 'center' })
-    // Role band
     doc.setFillColor(...color); doc.rect(x, y + 109, W, 13, 'F')
     doc.setTextColor(255, 255, 255); doc.setFontSize(12)
     doc.text(doc.splitTextToSize(String(p.role || '').toUpperCase(), W - 10)[0] || '', x + W / 2, y + 115.5, { align: 'center', baseline: 'middle' })
     doc.setTextColor(...MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(8)
     if (p.sub) doc.text(doc.splitTextToSize(p.sub, W - 14)[0], x + W / 2, y + 127, { align: 'center' })
-    // Sponsors + id
     if (sponsor) fit(doc, sponsor, 'PNG', x + 6, y + 130, W - 12, 12, sponsorSize)
     doc.setFontSize(6); doc.setTextColor(150, 152, 170)
     if (p.id) doc.text(`ID ${String(p.id).slice(0, 8).toUpperCase()}`, x + W - 5, y + H - 3, { align: 'right' })
-  })
+  }
+
+  for (let start = 0; start < people.length; start += 4) {
+    if (start) doc.addPage()
+    const group = people.slice(start, start + 4)
+    group.forEach((p, k) => {
+      const x = (k % 2) * W, y = Math.floor(k / 2) * H
+      if (p.pass && art[p.pass]) drawPass(p, photos[start + k], x, y)
+      else drawClassic(p, photos[start + k], x, y)
+    })
+    guides()
+    // Back sides on the next sheet, mirrored left/right for long-edge double-sided printing.
+    if (backs && group.some((p) => art[p.pass]?.back)) {
+      doc.addPage()
+      group.forEach((p, k) => {
+        const b = art[p.pass]?.back
+        if (!b) return
+        const x = (1 - (k % 2)) * W, y = Math.floor(k / 2) * H
+        doc.addImage(b, 'JPEG', x, y, W, H, `back-${p.pass}`, 'FAST')
+      })
+      guides()
+    }
+  }
   return doc
 }
 

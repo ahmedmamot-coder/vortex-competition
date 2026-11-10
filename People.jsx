@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
 import { Avatar, processPhoto, uploadPhoto } from './photos.jsx'
+import Passes from './Passes.jsx'
+import { passForPosition, usePassDesigns } from './passes.js'
 
 const PALETTE = ['#121236', '#1F23C9', '#3A7BE0', '#0E7C66', '#7A3FC2', '#B4461A', '#A1185A', '#4A4F6E']
 export const ATHLETE_COLOR = '#B4461A'
@@ -10,6 +12,7 @@ export default function People({ data, people }) {
   const { apps, positions, meet, entries } = data
   const { swimmers, urls, swimmerFor } = people
   const [view, setView] = useState('staff')
+  const passDesigns = usePassDesigns()
   const [clubFilter, setClubFilter] = useState('')
   const [clubs, setClubs] = useState([])
   const loadClubs = useCallback(async () => {
@@ -43,6 +46,7 @@ export default function People({ data, people }) {
     return m
   }, [positions])
   const posGroup = useMemo(() => Object.fromEntries(positions.map((p) => [p.name, p.group_name])), [positions])
+  const posByName = useMemo(() => Object.fromEntries(positions.map((p) => [p.name, p])), [positions])
 
   // Heat-sheet entries per swimmer (auto-matched by name, or linked by hand).
   const entryNames = useMemo(() => [...new Set(entries.map((e) => e.swimmer_name).filter(Boolean))].sort(), [entries])
@@ -57,14 +61,14 @@ export default function People({ data, people }) {
     .map((a) => ({
       kind: 'staff', id: a.id, raw: a, name: a.full_name, photo_path: a.photo_path, photoUrl: urls[a.photo_path] || null,
       role: a.position, sub: posGroup[a.position] || 'Meet staff', color: groupColor[posGroup[a.position]] || '#1F23C9',
-      marketing: a.marketing_consent, status: a.status
-    })), [apps, view, urls, posGroup, groupColor])
+      marketing: a.marketing_consent, status: a.status, pass: passForPosition(posByName[a.position])
+    })), [apps, view, urls, posGroup, groupColor, posByName])
   const swimmerRows = useMemo(() => swimmers.map((s) => ({
     kind: 'swimmer', id: s.id, raw: s, name: s.full_name, photo_path: s.photo_path, photoUrl: urls[s.photo_path] || null,
-    role: 'Athlete', sub: [clubName[s.club] || s.club, s.birth_year].filter(Boolean).join(' · '), color: ATHLETE_COLOR, marketing: s.marketing_consent
+    role: 'Athlete', sub: [clubName[s.club] || s.club, s.birth_year].filter(Boolean).join(' · '), color: ATHLETE_COLOR, marketing: s.marketing_consent, pass: 'swimmer'
   })), [swimmers, urls, clubName])
 
-  const rows = (view === 'swimmers' ? swimmerRows : view === 'clubs' ? [] : staffRows)
+  const rows = (view === 'swimmers' ? swimmerRows : view === 'clubs' || view === 'passes' ? [] : staffRows)
     .filter((r) => view !== 'swimmers' || !clubFilter || r.raw.club === clubFilter)
     .filter((r) => !q.trim() || `${r.name} ${r.role} ${r.sub}`.toLowerCase().includes(q.trim().toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -86,7 +90,7 @@ export default function People({ data, people }) {
     setBusy('badges'); setNote('')
     try {
       const { badgesPdf } = await import('./pdfout.js')
-      const doc = await badgesPdf({ people: list, meet, onProgress: (n, t) => setNote(`Preparing photos ${n} / ${t}…`) })
+      const doc = await badgesPdf({ people: list, meet, designs: passDesigns.designs, backs: true, onProgress: (n, t) => setNote(`Preparing photos ${n} / ${t}…`) })
       doc.save(`vortex-badges-${label || view}-${new Date().toISOString().slice(0, 10)}.pdf`)
       setNote(`Badges PDF downloaded: ${list.length} badge${list.length === 1 ? '' : 's'}, 4 per A4 page (A6 size, cut along the dotted lines).`)
     } catch (x) { setNote(`Could not make the badges: ${x.message}`) }
@@ -133,6 +137,7 @@ export default function People({ data, people }) {
             <button className="pill" aria-pressed={view === 'allstaff'} onClick={() => switchView('allstaff')}>All staff applicants</button>
             <button className="pill" aria-pressed={view === 'swimmers'} onClick={() => switchView('swimmers')}>Swimmers</button>
             <button className="pill" aria-pressed={view === 'clubs'} onClick={() => switchView('clubs')}>Clubs</button>
+            <button className="pill" aria-pressed={view === 'passes'} onClick={() => switchView('passes')}>Passes</button>
           </div>
           {view === 'swimmers' && (
             <select className="input" style={{ width: 'auto' }} value={clubFilter} onChange={(e) => { setClubFilter(e.target.value); setSel(new Set()) }} aria-label="Filter by club">
@@ -140,16 +145,18 @@ export default function People({ data, people }) {
               {clubStats.map((c) => <option key={c.code} value={c.code}>{clubName[c.code] || c.code}</option>)}
             </select>
           )}
-          {view !== 'clubs' && <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {view !== 'clubs' && view !== 'passes' && <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <input className="input" style={{ width: 220 }} placeholder="Search name, role, club" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search people" />
             <button className="btn sm primary" onClick={() => printBadges()} disabled={!!busy || !rows.length}>
               {busy === 'badges' ? 'Building badges…' : `Print badges (${chosen.length || rows.length})`}
             </button>
           </div>}
         </div>
-        {view === 'clubs' ? (
+        {view === 'passes' ? (
+          <Passes data={data} people={people} passDesigns={passDesigns} />
+        ) : view === 'clubs' ? (
           <ClubsTable clubStats={clubStats} clubs={clubs} meet={meet} reload={loadClubs} busy={busy}
-            onBadges={(c) => printBadges([...c.names].sort().map((n) => ({ name: n, photoUrl: people.photoForEntry({ swimmer_name: n }), role: 'Athlete', sub: clubName[c.code] || c.code, color: ATHLETE_COLOR, id: null })), `club-${c.code}`)} />
+            onBadges={(c) => printBadges([...c.names].sort().map((n) => ({ name: n, photoUrl: people.photoForEntry({ swimmer_name: n }), role: 'Athlete', sub: clubName[c.code] || c.code, color: ATHLETE_COLOR, id: null, pass: 'swimmer' })), `club-${c.code}`)} />
         ) : <>
         <div className="small muted">
           {chosen.length ? `${chosen.length} selected — only these will be printed. ` : 'Tick people to print only some badges. '}
