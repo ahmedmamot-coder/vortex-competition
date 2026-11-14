@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase.js'
-import { Avatar, processPhoto, uploadPhoto } from './photos.jsx'
+import { Avatar, logoToDataUrl, processPhoto, uploadPhoto } from './photos.jsx'
 import Passes from './Passes.jsx'
 import { PASS, passForPosition, usePassDesigns } from './passes.js'
 
@@ -231,13 +231,14 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
       {note && <div className="notice">{note}</div>}
       <div className="table">
         <table>
-          <thead><tr><th>Code</th><th>Club name (shown at the top of their page)</th><th>Swimmers</th><th>Photos</th><th /></tr></thead>
+          <thead><tr><th>Logo</th><th>Code</th><th>Club name (shown at the top of their page)</th><th>Swimmers</th><th>Photos</th><th /></tr></thead>
           <tbody>
             {clubStats.map((c) => {
               const row = byCode[c.code]
               const pct = Math.round((c.withPhoto.size / c.names.size) * 100)
               return (
                 <tr key={c.code}>
+                  <td><LogoCell row={row} code={c.code} ensure={ensure} reload={reload} setNote={setNote} /></td>
                   <td style={{ fontWeight: 800 }}>{c.code}</td>
                   <td><input className="input" defaultValue={row?.full_name || ''} placeholder={c.code} onBlur={(e) => rename(c.code, e.target.value)} style={{ minHeight: 34, fontSize: 13, minWidth: 200 }} aria-label={`Full name for ${c.code}`} /></td>
                   <td className="num">{c.names.size}</td>
@@ -343,6 +344,41 @@ function PersonCard({ r, selected, onToggle, data, people, matched, entryNames }
         ))}
         {err && <span className="err-text">{err}</span>}
       </div>
+    </div>
+  )
+}
+
+// Organizers can add, replace or remove a club's logo here as well.
+function LogoCell({ row, code, ensure, reload, setNote }) {
+  const ref = useRef(null)
+  const [busy, setBusy] = useState(false)
+  async function pick(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    setBusy(true)
+    try {
+      const club = await ensure(code)
+      const logo = await logoToDataUrl(f)
+      const { error } = await supabase.from('vc_clubs').update({ logo }).eq('id', club.id)
+      if (error) throw new Error(error.message)
+      setNote(`Logo saved for ${club.full_name || code}.`); reload()
+    } catch (x) { setNote(x.message) }
+    setBusy(false)
+  }
+  async function remove() {
+    if (!row || !window.confirm(`Remove the ${row.full_name || code} logo?`)) return
+    await supabase.from('vc_clubs').update({ logo: null }).eq('id', row.id)
+    reload()
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <button type="button" onClick={() => ref.current?.click()} disabled={busy} title={row?.logo ? 'Replace logo' : 'Add logo'}
+        style={{ width: 48, height: 48, borderRadius: 8, border: row?.logo ? '1px solid var(--line)' : '2px dashed var(--line)', background: '#fff', padding: 3, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {row?.logo ? <img src={row.logo} alt={`${code} logo`} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /> : <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>{busy ? '…' : '+ Logo'}</span>}
+      </button>
+      {row?.logo && <button type="button" className="btn sm" style={{ minHeight: 26, fontSize: 11 }} onClick={remove} aria-label={`Remove ${code} logo`}>✕</button>}
+      <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={pick} style={{ display: 'none' }} />
     </div>
   )
 }

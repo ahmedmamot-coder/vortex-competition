@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { supabase } from './supabase.js'
 import logoH from './logo-competition.svg'
 import { useMeet } from './useMeet.js'
 import { Avatar, usePeople } from './photos.jsx'
@@ -10,6 +11,11 @@ export default function HeatSheet() {
   const people = usePeople(apps)
   const [ev, setEv] = useState('all')
   const [onlyPhotos, setOnlyPhotos] = useState(false)
+  const [clubLogos, setClubLogos] = useState({})
+  useEffect(() => {
+    if (!meet) return
+    supabase.from('vc_clubs').select('code,logo').eq('meet_id', meet.id).then(({ data: c }) => setClubLogos(Object.fromEntries((c || []).filter((x) => x.logo).map((x) => [x.code, x.logo]))))
+  }, [meet])
 
   const byHeat = useMemo(() => {
     const m = {}
@@ -70,7 +76,7 @@ export default function HeatSheet() {
                               <td className="hs-lane">{e.lane}</td>
                               {(!onlyPhotos || any) && <td style={{ width: 34 }}>{src ? <img src={src} alt="" className="hs-photo" /> : <Avatar name={e.swimmer_name} size={26} radius={5} />}</td>}
                               <td style={{ fontWeight: 700 }}>{e.swimmer_name}</td>
-                              <td className="muted">{e.club}</td>
+                              <td className="muted"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{clubLogos[e.club] && <img src={clubLogos[e.club]} alt="" style={{ height: 18, maxWidth: 40, objectFit: 'contain' }} />}{e.club}</span></td>
                               <td className="num" style={{ textAlign: 'right' }}>{e.scratched ? 'SCR' : e.seed_time || 'NT'}</td>
                             </tr>
                           )

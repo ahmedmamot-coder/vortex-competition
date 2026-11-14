@@ -166,3 +166,18 @@ export function PhotoPicker({ value, onChange, err, label = 'Photo', hint }) {
     </div>
   )
 }
+
+// Club / academy logo: trims white edges and keeps it small (max 500 px wide PNG).
+export async function logoToDataUrl(file) {
+  if (!file || !/^image\//.test(file.type || 'image/')) throw new Error('Choose a logo image (PNG or JPG).')
+  const { imageFileToDataUrl } = await import('./heatsheet.js')
+  const trimmed = await imageFileToDataUrl(file)
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('This logo could not be opened.')); i.src = trimmed })
+  const scale = Math.min(1, 500 / img.naturalWidth, 500 / img.naturalHeight)
+  const c = document.createElement('canvas')
+  c.width = Math.max(1, Math.round(img.naturalWidth * scale)); c.height = Math.max(1, Math.round(img.naturalHeight * scale))
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height)
+  ctx.drawImage(img, 0, 0, c.width, c.height)
+  return c.toDataURL('image/png')
+}

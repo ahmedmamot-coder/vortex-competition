@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import logoH from './logo-competition.svg'
 import { supabase } from './supabase.js'
-import { processPhoto, uploadPhoto } from './photos.jsx'
+import { logoToDataUrl, processPhoto, uploadPhoto } from './photos.jsx'
 
 // Private page for one club (opened with its secret link): the club's swimmers and
 // events from the heat sheet, with a photo upload next to each name.
@@ -46,7 +46,8 @@ export default function ClubPortal() {
         {status === 'ok' && (
           <>
             <div className="card navy" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-              <div>
+              <ClubLogo k={key} logo={data.club.logo} name={data.club.name} onSaved={(logo) => setData((d) => ({ ...d, club: { ...d.club, logo } }))} />
+              <div style={{ flex: 1, minWidth: 200 }}>
                 <div className="eyebrow" style={{ color: '#d5dbfa' }}>Club accreditation photos</div>
                 <h1 style={{ fontSize: 30, margin: '4px 0 0', color: '#fff' }}>{data.club.name}</h1>
                 {data.club.name !== data.club.code && <div className="small" style={{ color: '#d5dbfa' }}>{data.club.code}</div>}
@@ -141,6 +142,38 @@ function SwimmerCard({ s, k, enabled, onDone }) {
         </div>
         {err && <span className="err-text">{err}</span>}
       </div>
+    </div>
+  )
+}
+
+// The club or academy logo, uploaded from this page (shown to organizers and on the heat sheet).
+function ClubLogo({ k, logo, name, onSaved }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const ref = useRef(null)
+  async function pick(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    setBusy(true); setErr('')
+    try {
+      const url = await logoToDataUrl(f)
+      const { error } = await supabase.rpc('vc_club_set_logo', { p_key: k, p_logo: url })
+      if (error) throw new Error('The logo could not be saved. Please try again.')
+      onSaved(url)
+    } catch (x) { setErr(x.message) }
+    setBusy(false)
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      <button type="button" onClick={() => ref.current?.click()} disabled={busy} title={logo ? 'Replace club logo' : 'Upload club logo'}
+        style={{ width: 96, height: 96, borderRadius: 14, background: '#fff', border: logo ? '0' : '2px dashed #8e93c9', padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        {logo ? <img src={logo} alt={`${name} logo`} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+          : <span style={{ fontSize: 11.5, fontWeight: 700, color: '#1f23c9', lineHeight: 1.3 }}>{busy ? 'Uploading…' : 'Add club logo'}</span>}
+      </button>
+      <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={pick} style={{ display: 'none' }} />
+      {logo && <button type="button" className="btn sm ghost-light" style={{ minHeight: 26, fontSize: 11.5 }} disabled={busy} onClick={() => ref.current?.click()}>{busy ? 'Uploading…' : 'Replace logo'}</button>}
+      {err && <span className="small" style={{ color: '#ffd1cc', maxWidth: 160, textAlign: 'center' }}>{err}</span>}
     </div>
   )
 }
