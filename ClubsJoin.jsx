@@ -21,7 +21,7 @@ export default function ClubsJoin() {
   }, [])
 
   const unclaimed = (clubs || []).filter((c) => !c.registered)
-  const registered = (clubs || []).filter((c) => c.registered)
+  const pickedNew = (clubs || []).find((c) => c.id === login.club_id && !c.registered) || null
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
   const go = (key) => { window.location.href = `/club?key=${key}` }
 
@@ -46,6 +46,7 @@ export default function ClubsJoin() {
     e.preventDefault()
     setErr('')
     if (!login.club_id) return setErr('Choose your club.')
+    if (pickedNew) return setErr(`${pickedNew.name} is not registered yet. Use the button above to register it.`)
     if (!/^\d{8}$/.test(login.mobile)) return setErr('Enter the 8-digit mobile number used to register the club.')
     setBusy(true)
     const { data, error } = await supabase.rpc('vc_club_login', { p_club_id: login.club_id, p_mobile: login.mobile })
@@ -116,9 +117,15 @@ export default function ClubsJoin() {
               <label htmlFor="lc">Your club</label>
               <select id="lc" className="input" value={login.club_id} onChange={(e) => setLogin({ ...login, club_id: e.target.value })}>
                 <option value="">Choose your club</option>
-                {registered.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {(clubs || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+            {pickedNew && (
+              <div className="notice" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span><strong>{pickedNew.name}</strong> is on the list but has not been registered by its coach yet. Register it first (coach name and mobile) — it takes a minute.</span>
+                <button type="button" className="btn sm primary" style={{ alignSelf: 'flex-start' }} onClick={() => { setMode('new'); setErr(''); setF((p) => ({ ...p, club_id: pickedNew.id })) }}>Register {pickedNew.name}</button>
+              </div>
+            )}
             <div className="field">
               <label htmlFor="lm">Coach mobile used to register</label>
               <div style={{ display: 'flex', gap: 8 }}>
