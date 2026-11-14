@@ -3,6 +3,7 @@ import { supabase } from './supabase.js'
 import { Avatar, logoToDataUrl, processPhoto, uploadPhoto } from './photos.jsx'
 import Passes from './Passes.jsx'
 import { PASS, passForPosition, usePassDesigns } from './passes.js'
+import { readEntriesPdf } from './entries.js'
 
 const PALETTE = ['#121236', '#1F23C9', '#3A7BE0', '#0E7C66', '#7A3FC2', '#B4461A', '#A1185A', '#4A4F6E']
 export const ATHLETE_COLOR = '#B4461A'
@@ -203,6 +204,55 @@ export default function People({ data, people }) {
 function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
   const [note, setNote] = useState('')
   const [newCode, setNewCode] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [report, setReport] = useState([])
+  const entriesRef = useRef(null)
+
+  // Import HY-TEK "Entries - All Events" PDFs: one club per file, found by its name.
+  async function importEntries(e) {
+    const files = [...(e.target.files || [])]
+    e.target.value = ''
+    if (!files.length) return
+    setImporting(true); setReport([])
+    const out = []
+    let list = clubs
+    for (const f of files) {
+      try {
+        const r = await readEntriesPdf(f)
+        if (!r.team || !r.swimmers.length) throw new Error('No club entries found. Use the HY-TEK “Team Entries - All Events” report.')
+        const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        let club = list.find((c) => norm(c.full_name) === norm(r.team)) || list.find((c) => norm(c.code) === norm(r.team))
+        let created = false
+        if (!club) {
+          let code = (r.team.split(/\s+/)[0] || r.team).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'CLUB'
+          while (list.some((c) => c.code === code)) code += '1'
+          const { data, error } = await supabase.from('vc_clubs').insert({ meet_id: meet.id, code, full_name: r.team }).select().single()
+          if (error) throw new Error(error.message)
+          club = data; list = [...list, data]; created = true
+        }
+        const { data: existing } = await supabase.from('vc_swimmers').select('id,full_name,entry_name').eq('meet_id', meet.id).eq('club', club.code)
+        const byName = new Map((existing || []).map((x) => [norm(x.entry_name || x.full_name), x]))
+        let added = 0, updated = 0
+        const inserts = []
+        for (const s of r.swimmers) {
+          const row = { entry_name: s.name, gender: s.gender, age: s.age, entries: s.events }
+          const ex = byName.get(norm(s.name))
+          if (ex) { await supabase.from('vc_swimmers').update(row).eq('id', ex.id); updated++ }
+          else inserts.push({ ...row, meet_id: meet.id, club: club.code, full_name: s.name, guardian_consent: false })
+        }
+        for (let i = 0; i < inserts.length; i += 100) {
+          const { error } = await supabase.from('vc_swimmers').insert(inserts.slice(i, i + 100))
+          if (error) throw new Error(error.message)
+          added += inserts.slice(i, i + 100).length
+        }
+        const check = r.total == null ? '' : r.count === r.total ? ` (matches the report total ✓)` : ` (report says ${r.total} — please check)`
+        out.push({ text: `${r.team}: ${r.swimmers.length} swimmers, ${r.count} individual entries${check}. ${added} added, ${updated} updated.${created ? ` New club created with team code ${club.code} — correct the code below if HY-TEK uses a different one.` : ` Added to ${club.full_name || club.code} (${club.code}).`}` })
+      } catch (x) { out.push({ error: true, text: `${f.name}: ${x.message}` }) }
+      setReport([...out])
+    }
+    setImporting(false)
+    reload()
+  }
   const [newName, setNewName] = useState('')
   const byCode = Object.fromEntries(clubs.map((c) => [c.code, c]))
 
@@ -283,6 +333,19 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
         <button type="button" className="btn sm dark" onClick={copyShared}>Copy club registration link</button>
         <a className="btn sm" href="/clubs" target="_blank" rel="noreferrer">Open</a>
       </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: 12, border: '1.5px solid #c9cdf5', borderRadius: 12 }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ fontWeight: 800 }}>Import club entries (HY-TEK PDF)</div>
+          <div className="small muted">Upload each club’s “Entries - All Events” PDF from HY-TEK (you can select several). Swimmers and their events are added to that club with names exactly as in HY-TEK, so the club only adds photos. Importing the same club again updates it and keeps the photos.</div>
+        </div>
+        <button type="button" className="btn sm primary" disabled={importing} onClick={() => entriesRef.current?.click()}>{importing ? 'Importing…' : 'Import entries PDF'}</button>
+        <input ref={entriesRef} type="file" accept="application/pdf" multiple onChange={importEntries} style={{ display: 'none' }} />
+      </div>
+      {report.length > 0 && (
+        <div className="notice" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {report.map((r, i) => <div key={i} className={r.error ? 'err-text' : ''}>{r.text}</div>)}
+        </div>
+      )}
       <form onSubmit={addClub} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 12, background: 'var(--soft-2)', borderRadius: 12 }}>
         <span className="small" style={{ fontWeight: 800 }}>Add a club</span>
         <input className="input" style={{ width: 150, minHeight: 36 }} placeholder="Team code (HY-TEK)" value={newCode} onChange={(e) => setNewCode(e.target.value)} aria-label="Team code" />

@@ -42,7 +42,7 @@ export default function ClubPortal() {
       if (r) used.add(r.id)
       return { key: `h-${s.name}`, entryName: s.name, name: s.name, regName: r?.name, id: r?.id || null, events: s.events, has_photo: !!r?.has_photo, marketing: !!r?.marketing, onHeatSheet: true }
     })
-    reg.filter((r) => !used.has(r.id)).forEach((r) => out.push({ key: `r-${r.id}`, name: r.name, id: r.id, events: [], has_photo: r.has_photo, marketing: r.marketing, birth_year: r.birth_year, onHeatSheet: false }))
+    reg.filter((r) => !used.has(r.id)).forEach((r) => out.push({ key: `r-${r.id}`, name: r.name, id: r.id, events: r.entries || [], imported: !!r.entries, age: r.age, has_photo: r.has_photo, marketing: r.marketing, birth_year: r.birth_year, onHeatSheet: false }))
     return out.sort((a, b) => a.name.localeCompare(b.name))
   }, [data])
 
@@ -241,7 +241,7 @@ function SwimmerCard({ s, k, enabled, heatSheet, onChanged }) {
         {s.events.length ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {s.events.map((e, i) => (
-              <div key={i} className="small" style={{ color: 'var(--ink-2)' }}>#{e.no} {e.name} <span className="muted">· H{e.heat} L{e.lane}{e.seed ? ` · ${e.seed}` : ''}</span></div>
+              <div key={i} className="small" style={{ color: 'var(--ink-2)' }}>#{e.no} {e.name} <span className="muted">· {e.heat ? `H${e.heat} L${e.lane}` : 'entry'}{e.seed ? ` · ${e.seed}` : ''}</span></div>
             ))}
           </div>
         ) : <div className="small muted">{missing ? 'Not found on the heat sheet — check the spelling.' : 'Events appear when the heat sheet is published.'}{s.birth_year ? ` · Born ${s.birth_year}` : ''}</div>}
@@ -253,7 +253,7 @@ function SwimmerCard({ s, k, enabled, heatSheet, onChanged }) {
           <button type="button" className={`btn sm ${s.has_photo ? '' : 'primary'}`} disabled={!enabled || busy} onClick={() => fileRef.current?.click()}>
             {busy ? 'Saving…' : s.has_photo ? 'Replace photo' : 'Add photo'}
           </button>
-          {s.id && !s.onHeatSheet && !editing && <button type="button" className="btn sm" disabled={!enabled} onClick={() => { setNewName(s.name); setEditing(true) }}>Edit name</button>}
+          {s.id && !s.onHeatSheet && !s.imported && !editing && <button type="button" className="btn sm" disabled={!enabled} onClick={() => { setNewName(s.name); setEditing(true) }}>Edit name</button>}
           {s.has_photo && !busy && <span className="chip ok">Photo added</span>}
         </div>
         {err && <span className="err-text">{err}</span>}
