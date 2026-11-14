@@ -10,7 +10,7 @@ export default function ClubsJoin() {
   const [clubs, setClubs] = useState(null)
   const [mode, setMode] = useState('new')
   const [f, setF] = useState({ club_id: '', name: '', code: '', coach: '', mobile: '', email: '' })
-  const [login, setLogin] = useState({ club_id: '', mobile: '' })
+  const [login, setLogin] = useState({ club_id: '', mobile: '', coach: '', email: '' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -21,7 +21,9 @@ export default function ClubsJoin() {
   }, [])
 
   const unclaimed = (clubs || []).filter((c) => !c.registered)
-  const pickedNew = (clubs || []).find((c) => c.id === login.club_id && !c.registered) || null
+  const known = (clubs || []).filter((c) => c.registered)
+  // Registered by the organizers (entries imported) but the coach has not opened it yet.
+  const firstTime = (clubs || []).find((c) => c.id === login.club_id && !c.claimed) || null
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
   const go = (key) => { window.location.href = `/club?key=${key}` }
 
@@ -35,8 +37,8 @@ export default function ClubsJoin() {
     const { data, error } = await supabase.rpc('vc_club_signup', { p_club_id: f.club_id || null, p_name: f.club_id ? '' : f.name, p_code: f.code, p_coach: f.coach, p_mobile: f.mobile, p_email: f.email })
     setBusy(false)
     if (error) {
-      if (/already registered/.test(error.message)) { setMode('back'); setLogin({ club_id: f.club_id, mobile: '' }); return setErr('This club is already registered. Open it with the coach’s mobile number.') }
-      if (/already listed/.test(error.message)) return setErr('This club is already in the list. Choose it from “My club is listed”.')
+      if (/already registered/.test(error.message)) { setMode('back'); setLogin({ club_id: f.club_id, mobile: '', coach: '', email: '' }); return setErr('This club is already registered. Open it with the coach’s mobile number.') }
+      if (/already listed/.test(error.message)) { setMode('back'); return setErr('This club is already registered by the organizers. Choose it here under “Already registered”.') }
       return setErr('Could not register the club. Please check the details and try again.')
     }
     go(data)
@@ -46,9 +48,15 @@ export default function ClubsJoin() {
     e.preventDefault()
     setErr('')
     if (!login.club_id) return setErr('Choose your club.')
-    if (pickedNew) return setErr(`${pickedNew.name} is not registered yet. Use the button above to register it.`)
-    if (!/^\d{8}$/.test(login.mobile)) return setErr('Enter the 8-digit mobile number used to register the club.')
+    if (firstTime && login.coach.trim().split(/\s+/).length < 2) return setErr('Enter the coach or team manager’s full name.')
+    if (!/^\d{8}$/.test(login.mobile)) return setErr(firstTime ? 'Enter an 8-digit Qatar mobile number.' : 'Enter the 8-digit mobile number used to register the club.')
     setBusy(true)
+    if (firstTime) {
+      const { data, error } = await supabase.rpc('vc_club_signup', { p_club_id: login.club_id, p_name: '', p_code: '', p_coach: login.coach, p_mobile: login.mobile, p_email: login.email })
+      setBusy(false)
+      if (error) return setErr(/already registered/.test(error.message) ? 'This club was just opened by another coach. Enter the mobile number they used.' : 'Could not open the club page. Please check the details and try again.')
+      return go(data)
+    }
     const { data, error } = await supabase.rpc('vc_club_login', { p_club_id: login.club_id, p_mobile: login.mobile })
     setBusy(false)
     if (error || !data) return setErr('That mobile number does not match this club. Contact the organizers if you need help.')
@@ -117,22 +125,24 @@ export default function ClubsJoin() {
               <label htmlFor="lc">Your club</label>
               <select id="lc" className="input" value={login.club_id} onChange={(e) => setLogin({ ...login, club_id: e.target.value })}>
                 <option value="">Choose your club</option>
-                {(clubs || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {known.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              <span className="small muted">Not in the list? Use “Register my club”.</span>
             </div>
-            {pickedNew && (
-              <div className="notice" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span><strong>{pickedNew.name}</strong> is on the list but has not been registered by its coach yet. Register it first (coach name and mobile) — it takes a minute.</span>
-                <button type="button" className="btn sm primary" style={{ alignSelf: 'flex-start' }} onClick={() => { setMode('new'); setErr(''); setF((p) => ({ ...p, club_id: pickedNew.id })) }}>Register {pickedNew.name}</button>
-              </div>
+            {firstTime && (
+              <>
+                <div className="notice">Your club is registered and your entries are already loaded. First time here: enter the coach name and the mobile number you will use to open this page again.</div>
+                <div className="field"><label htmlFor="lco">Coach or team manager full name</label><input id="lco" className="input" autoComplete="name" value={login.coach} onChange={(e) => setLogin({ ...login, coach: e.target.value })} /></div>
+              </>
             )}
             <div className="field">
-              <label htmlFor="lm">Coach mobile used to register</label>
+              <label htmlFor="lm">{firstTime ? 'Mobile number' : 'Coach mobile used to register'}</label>
               <div style={{ display: 'flex', gap: 8 }}>
                 <span className="input" style={{ width: 'auto', display: 'flex', alignItems: 'center', fontWeight: 700, background: 'var(--soft-2)' }}>+974</span>
                 <input id="lm" className="input" type="tel" inputMode="numeric" maxLength={8} value={login.mobile} onChange={(e) => setLogin({ ...login, mobile: e.target.value.replace(/\D/g, '').slice(0, 8) })} placeholder="8 digits" />
               </div>
             </div>
+            {firstTime && <div className="field"><label htmlFor="lce">Email (optional)</label><input id="lce" className="input" type="email" autoComplete="email" value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} /></div>}
             {err && <div className="notice error">{err}</div>}
             <button className="btn primary" style={{ minHeight: 52 }} disabled={busy}>{busy ? 'Opening…' : 'Open my club page'}</button>
           </form>

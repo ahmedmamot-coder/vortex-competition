@@ -367,7 +367,8 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
                   <td><input className="input" key={`c-${c.code}`} defaultValue={c.code} onBlur={(e) => changeCode(row, c.code, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} style={{ minHeight: 34, fontSize: 13, width: 100, fontWeight: 800 }} aria-label={`Team code for ${c.code}`} /></td>
                   <td>
                     <input className="input" key={`n-${c.code}-${row?.full_name || ''}`} defaultValue={row?.full_name || ''} placeholder="Type the club’s full name" onBlur={(e) => rename(c.code, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} style={{ minHeight: 34, fontSize: 13, minWidth: 200 }} aria-label={`Full name for ${c.code}`} />
-                    {row?.coach_name && <div className="small muted" style={{ marginTop: 4 }}>{row.coach_name} · +974 {row.coach_mobile}{row.coach_email ? ` · ${row.coach_email}` : ''}</div>}
+                    {row?.coach_name ? <div className="small muted" style={{ marginTop: 4 }}>{row.coach_name} · +974 {row.coach_mobile}{row.coach_email ? ` · ${row.coach_email}` : ''}</div>
+                      : row && c.total > 0 ? <div className="small muted" style={{ marginTop: 4 }}>Registered from entries · coach has not opened the club page yet</div> : null}
                   </td>
                   <td className="num">{c.total}{!c.names.size && c.total ? <div className="small muted">registered</div> : null}</td>
                   <td style={{ minWidth: 120 }}>
