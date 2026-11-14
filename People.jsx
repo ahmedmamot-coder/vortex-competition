@@ -31,8 +31,17 @@ export default function People({ data, people }) {
       c.names.add(e.swimmer_name)
       if (people.photoForEntry(e)) c.withPhoto.add(e.swimmer_name)
     })
-    return Object.values(m).sort((a, b) => b.names.size - a.names.size)
-  }, [entries, people])
+    // Clubs set up before the heat sheet, and swimmers clubs registered themselves.
+    const blank = (code) => ({ code, names: new Set(), withPhoto: new Set(), reg: [] })
+    clubs.forEach((c) => { if (!m[c.code]) m[c.code] = blank(c.code) })
+    swimmers.forEach((sw) => { if (sw.club) (m[sw.club] = m[sw.club] || blank(sw.club)).reg.push(sw) })
+    Object.values(m).forEach((c) => {
+      // Before the heat sheet: count the club's own registrations.
+      c.total = c.names.size || c.reg.length
+      c.photos = c.names.size ? c.withPhoto.size : c.reg.filter((x) => x.photo_path).length
+    })
+    return Object.values(m).sort((a, b) => b.total - a.total || a.code.localeCompare(b.code))
+  }, [entries, people, clubs, swimmers])
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(() => new Set())
   const [busy, setBusy] = useState('')
@@ -161,7 +170,10 @@ export default function People({ data, people }) {
           <Passes data={data} people={people} passDesigns={passDesigns} />
         ) : view === 'clubs' ? (
           <ClubsTable clubStats={clubStats} clubs={clubs} meet={meet} reload={loadClubs} busy={busy}
-            onBadges={(c) => printBadges([...c.names].sort().map((n) => ({ name: n, photoUrl: people.photoForEntry({ swimmer_name: n }), role: 'Athlete', sub: clubName[c.code] || c.code, color: ATHLETE_COLOR, id: null, pass: 'swimmer' })), `club-${c.code}`)} />
+            onBadges={(c) => printBadges((c.names.size
+              ? [...c.names].sort().map((n) => ({ name: n, photoUrl: people.photoForEntry({ swimmer_name: n }) }))
+              : c.reg.map((x) => ({ name: x.full_name, photoUrl: urls[x.photo_path] || null })).sort((a, b) => a.name.localeCompare(b.name))
+            ).map((x) => ({ ...x, role: 'Athlete', sub: clubName[c.code] || c.code, color: ATHLETE_COLOR, id: null, pass: 'swimmer' })), `club-${c.code}`)} />
         ) : <>
         <div className="small muted">
           {chosen.length ? `${chosen.length} selected — only these will be printed. ` : 'Tick people to print only some badges. '}
@@ -190,6 +202,8 @@ export default function People({ data, people }) {
 // One row per club on the heat sheet: display name, photo progress, private upload link.
 function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
   const [note, setNote] = useState('')
+  const [newCode, setNewCode] = useState('')
+  const [newName, setNewName] = useState('')
   const byCode = Object.fromEntries(clubs.map((c) => [c.code, c]))
 
   async function ensure(code) {
@@ -224,26 +238,42 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
     } catch (x) { setNote(x.message) }
   }
 
-  if (!clubStats.length) return <div className="empty">Import the heat sheet first — clubs are taken from it.</div>
+  async function addClub(e) {
+    e.preventDefault()
+    const code = newCode.trim().toUpperCase()
+    if (!code) return setNote('Enter the club’s team code as in HY-TEK (for example VTX).')
+    if (byCode[code]) return setNote(`${code} is already in the list.`)
+    const { error } = await supabase.from('vc_clubs').insert({ meet_id: meet.id, code, full_name: newName.trim() || null })
+    if (error) return setNote(error.message)
+    setNewCode(''); setNewName(''); setNote(`${newName.trim() || code} added. Click “Create club link” and send it to the club.`); reload()
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <p className="small muted" style={{ margin: 0 }}>Each club gets a private link showing only its own swimmers and events, where the coach can upload a photo next to each name. Photos appear here, on badges and on the heat sheet straight away.</p>
+      <p className="small muted" style={{ margin: 0 }}>Each club gets a private link where the coach registers the club’s swimmers with name and photo — even before the heat sheet is ready — and adds the club logo. Once the heat sheet is imported, names are matched automatically and each swimmer’s events appear. Photos show here, on badges and on the heat sheet straight away.</p>
+      <form onSubmit={addClub} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 12, background: 'var(--soft-2)', borderRadius: 12 }}>
+        <span className="small" style={{ fontWeight: 800 }}>Add a club</span>
+        <input className="input" style={{ width: 150, minHeight: 36 }} placeholder="Team code (HY-TEK)" value={newCode} onChange={(e) => setNewCode(e.target.value)} aria-label="Team code" />
+        <input className="input" style={{ width: 240, minHeight: 36 }} placeholder="Club or academy name" value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="Club name" />
+        <button className="btn sm primary">Add club</button>
+      </form>
       {note && <div className="notice">{note}</div>}
+      {!clubStats.length && <div className="empty">No clubs yet. Add each club above with its HY-TEK team code, then send it its link.</div>}
       <div className="table">
         <table>
           <thead><tr><th>Logo</th><th>Code</th><th>Club name (shown at the top of their page)</th><th>Swimmers</th><th>Photos</th><th /></tr></thead>
           <tbody>
             {clubStats.map((c) => {
               const row = byCode[c.code]
-              const pct = Math.round((c.withPhoto.size / c.names.size) * 100)
+              const pct = c.total ? Math.round((c.photos / c.total) * 100) : 0
               return (
                 <tr key={c.code}>
                   <td><LogoCell row={row} code={c.code} ensure={ensure} reload={reload} setNote={setNote} /></td>
                   <td style={{ fontWeight: 800 }}>{c.code}</td>
                   <td><input className="input" defaultValue={row?.full_name || ''} placeholder={c.code} onBlur={(e) => rename(c.code, e.target.value)} style={{ minHeight: 34, fontSize: 13, minWidth: 200 }} aria-label={`Full name for ${c.code}`} /></td>
-                  <td className="num">{c.names.size}</td>
+                  <td className="num">{c.total}{!c.names.size && c.total ? <div className="small muted">registered</div> : null}</td>
                   <td style={{ minWidth: 120 }}>
-                    <div className="small" style={{ fontWeight: 700 }}>{c.withPhoto.size} / {c.names.size}</div>
+                    <div className="small" style={{ fontWeight: 700 }}>{c.photos} / {c.total}</div>
                     <div className="bar"><div style={{ width: `${pct}%` }} /></div>
                   </td>
                   <td>
