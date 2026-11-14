@@ -208,7 +208,8 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
   const [report, setReport] = useState([])
   const entriesRef = useRef(null)
 
-  // Import HY-TEK "Entries - All Events" PDFs: one club per file, found by its name.
+  // Import HY-TEK entries PDFs (Meet Manager "Entries - All Events" or Team Manager
+  // "Individual Meet Entries Report"): one club per file, found by its code or name.
   async function importEntries(e) {
     const files = [...(e.target.files || [])]
     e.target.value = ''
@@ -219,12 +220,12 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
     for (const f of files) {
       try {
         const r = await readEntriesPdf(f)
-        if (!r.team || !r.swimmers.length) throw new Error('No club entries found. Use the HY-TEK “Team Entries - All Events” report.')
+        if (!r.team || !r.swimmers.length) throw new Error('No club entries found. Use the HY-TEK “Team Entries - All Events” or Team Manager “Individual Meet Entries Report”.')
         const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-        let club = list.find((c) => norm(c.full_name) === norm(r.team)) || list.find((c) => norm(c.code) === norm(r.team))
+        let club = (r.code && list.find((c) => norm(c.code) === norm(r.code))) || list.find((c) => norm(c.full_name) === norm(r.team)) || list.find((c) => norm(c.code) === norm(r.team))
         let created = false
         if (!club) {
-          let code = (r.team.split(/\s+/)[0] || r.team).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'CLUB'
+          let code = (r.code || r.team.split(/\s+/)[0] || r.team).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'CLUB'
           while (list.some((c) => c.code === code)) code += '1'
           const { data, error } = await supabase.from('vc_clubs').insert({ meet_id: meet.id, code, full_name: r.team }).select().single()
           if (error) throw new Error(error.message)
@@ -245,8 +246,9 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
           if (error) throw new Error(error.message)
           added += inserts.slice(i, i + 100).length
         }
+        if (!club.full_name && r.team && norm(r.team) !== norm(club.code)) { await supabase.from('vc_clubs').update({ full_name: r.team }).eq('id', club.id); club = { ...club, full_name: r.team } }
         const check = r.total == null ? '' : r.count === r.total ? ` (matches the report total ✓)` : ` (report says ${r.total} — please check)`
-        out.push({ text: `${r.team}: ${r.swimmers.length} swimmers, ${r.count} individual entries${check}. ${added} added, ${updated} updated.${created ? ` New club created with team code ${club.code} — correct the code below if HY-TEK uses a different one.` : ` Added to ${club.full_name || club.code} (${club.code}).`}` })
+        out.push({ text: `${r.team}: ${r.swimmers.length} swimmers, ${r.count} individual entries${check}. ${added} added, ${updated} updated.${created ? ` New club created with team code ${club.code}${r.code ? ' (from the PDF)' : ' — correct the code below if HY-TEK uses a different one'}. It now counts as registered.` : ` Added to ${club.full_name || club.code} (${club.code}).`}` })
       } catch (x) { out.push({ error: true, text: `${f.name}: ${x.message}` }) }
       setReport([...out])
     }

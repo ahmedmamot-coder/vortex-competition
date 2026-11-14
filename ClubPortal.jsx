@@ -241,7 +241,7 @@ function SwimmerCard({ s, k, enabled, heatSheet, onChanged }) {
         {s.events.length ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {s.events.map((e, i) => (
-              <div key={i} className="small" style={{ color: 'var(--ink-2)' }}>#{e.no} {e.name} <span className="muted">· {e.heat ? `H${e.heat} L${e.lane}` : 'entry'}{e.seed ? ` · ${e.seed}` : ''}</span></div>
+              <div key={i} className="small" style={{ color: 'var(--ink-2)' }}>#{e.code || e.no} {e.name} <span className="muted">· {e.heat ? `H${e.heat} L${e.lane}` : 'entry'}{e.seed ? ` · ${e.seed}` : ''}</span></div>
             ))}
           </div>
         ) : <div className="small muted">{missing ? 'Not found on the heat sheet — check the spelling.' : 'Events appear when the heat sheet is published.'}{s.birth_year ? ` · Born ${s.birth_year}` : ''}</div>}
