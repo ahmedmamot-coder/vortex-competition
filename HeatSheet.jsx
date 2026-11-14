@@ -8,7 +8,7 @@ import { Avatar, usePeople } from './photos.jsx'
 export default function HeatSheet() {
   const data = useMeet()
   const { meet, events, order, entries, loading, apps } = data
-  const people = usePeople(apps)
+  const people = usePeople(apps, meet?.id)
   const [ev, setEv] = useState('all')
   const [onlyPhotos, setOnlyPhotos] = useState(false)
   const [clubLogos, setClubLogos] = useState({})

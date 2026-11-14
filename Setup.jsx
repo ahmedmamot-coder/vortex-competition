@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase.js'
 import { parseCsv } from './lib.js'
 import Sponsors from './Sponsors.jsx'
+import Competitions from './Competitions.jsx'
 
 const SAMPLE = `event_no,event_name,heat_no,lane,swimmer_name,club,seed_time
 1,Girls 11-12 50m Freestyle,1,3,Swimmer Name,Vortex Aquatics,0:34.20
@@ -237,13 +238,15 @@ export default function Setup({ data }) {
     loadAdmins()
   }
 
-  if (!meet) return <div className="notice error">No active meet found.</div>
+  if (!meet) return <Competitions data={data} />
 
   const heatsFor = (id) => order.filter((h) => h.event_id === id).length
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }} aria-label="Meet setup">
       {msg && <div className={`notice ${msg.type}`} role="status">{msg.text}</div>}
+
+      <Competitions data={data} />
 
       <div className="split">
         <form className="card side" style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 'none' }} onSubmit={saveMeet}>

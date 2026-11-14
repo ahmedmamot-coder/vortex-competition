@@ -7,7 +7,7 @@ import { usePeople } from './photos.jsx'
 // otherwise the next heat to be called. Updates live.
 export default function Board() {
   const { meet, order, runIdx, entries, loading, laneStart, apps } = useMeet()
-  const people = usePeople(apps)
+  const people = usePeople(apps, meet?.id)
 
   const shown = useMemo(() => {
     const after = order.slice(Math.max(runIdx + 1, 0))

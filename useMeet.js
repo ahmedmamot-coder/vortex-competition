@@ -22,7 +22,7 @@ export function useMeet() {
     const [ev, ps, ap] = await Promise.all([
       supabase.from('vc_events').select('*').eq('meet_id', m.id).order('event_no'),
       supabase.from('vc_positions').select('*').eq('meet_id', m.id).order('sort'),
-      supabase.from('vc_applications').select('*').order('created_at', { ascending: false })
+      supabase.from('vc_applications').select('*').eq('meet_id', m.id).order('created_at', { ascending: false })
     ])
     const evs = ev.data || []
     const ids = evs.map((e) => e.id)

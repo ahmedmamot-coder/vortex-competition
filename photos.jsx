@@ -52,18 +52,20 @@ function sameName(a, b) {
 }
 
 // Loads swimmers with photos and signed URLs for every photo (staff + swimmers).
-export function usePeople(apps = []) {
+export function usePeople(apps = [], meetId = null) {
   const [swimmers, setSwimmers] = useState([])
   const [urls, setUrls] = useState({})
   const [error, setError] = useState(null)
   const cache = useRef({})
 
   const load = useCallback(async () => {
-    const { data, error: e } = await supabase.from('vc_swimmers').select('*').order('full_name')
+    let q = supabase.from('vc_swimmers').select('*').order('full_name')
+    if (meetId) q = q.eq('meet_id', meetId)
+    const { data, error: e } = await q
     if (e) { setError(e.message); return }
     setError(null)
     setSwimmers(data || [])
-  }, [])
+  }, [meetId])
 
   useEffect(() => {
     load()
