@@ -28,17 +28,21 @@ export default function People({ data, people }) {
     const m = {}
     entries.forEach((e) => {
       if (!e.club || e.club.includes('·')) return
-      const c = (m[e.club] = m[e.club] || { code: e.club, names: new Set(), withPhoto: new Set() })
+      const c = (m[e.club] = m[e.club] || { code: e.club, names: new Set(), withPhoto: new Set(), swims: 0 })
       c.names.add(e.swimmer_name)
+      c.swims++
       if (people.photoForEntry(e)) c.withPhoto.add(e.swimmer_name)
     })
     // Clubs set up before the heat sheet, and swimmers clubs registered themselves.
-    const blank = (code) => ({ code, names: new Set(), withPhoto: new Set(), reg: [] })
+    const blank = (code) => ({ code, names: new Set(), withPhoto: new Set(), reg: [], swims: 0 })
     clubs.forEach((c) => { if (!m[c.code]) m[c.code] = blank(c.code) })
-    swimmers.forEach((sw) => { if (sw.club) (m[sw.club] = m[sw.club] || blank(sw.club)).reg.push(sw) })
+    swimmers.forEach((sw) => { if (sw.club) { const c = (m[sw.club] = m[sw.club] || blank(sw.club)); c.reg = c.reg || []; c.reg.push(sw) } })
     Object.values(m).forEach((c) => {
       // Before the heat sheet: count the club's own registrations.
+      c.reg = c.reg || []
       c.total = c.names.size || c.reg.length
+      // Individual entries: swims on the heat sheet, or the events imported from the club's entries PDF.
+      c.entries = c.names.size ? c.swims : c.reg.reduce((n, x) => n + (Array.isArray(x.entries) ? x.entries.length : 0), 0)
       c.photos = c.names.size ? c.withPhoto.size : c.reg.filter((x) => x.photo_path).length
     })
     return Object.values(m).sort((a, b) => b.total - a.total || a.code.localeCompare(b.code))
@@ -358,7 +362,7 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
       {!clubStats.length && <div className="empty">No clubs yet. Add each club above with its HY-TEK team code, then send it its link.</div>}
       <div className="table">
         <table>
-          <thead><tr><th>Logo</th><th>Code</th><th>Club name (click to edit)</th><th>Swimmers</th><th>Photos</th><th /></tr></thead>
+          <thead><tr><th>Logo</th><th>Code</th><th>Club name (click to edit)</th><th>Swimmers</th><th>Entries</th><th>Photos</th><th /></tr></thead>
           <tbody>
             {clubStats.map((c) => {
               const row = byCode[c.code]
@@ -373,6 +377,7 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
                       : row && c.total > 0 ? <div className="small muted" style={{ marginTop: 4 }}>Registered from entries · coach has not opened the club page yet</div> : null}
                   </td>
                   <td className="num">{c.total}{!c.names.size && c.total ? <div className="small muted">registered</div> : null}</td>
+                  <td className="num">{c.entries || '—'}</td>
                   <td style={{ minWidth: 120 }}>
                     <div className="small" style={{ fontWeight: 700 }}>{c.photos} / {c.total}</div>
                     <div className="bar"><div style={{ width: `${pct}%` }} /></div>
@@ -390,6 +395,24 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
               )
             })}
           </tbody>
+          {clubStats.length > 0 && (() => {
+            const t = clubStats.reduce((a, c) => ({ swimmers: a.swimmers + c.total, entries: a.entries + (c.entries || 0), photos: a.photos + c.photos }), { swimmers: 0, entries: 0, photos: 0 })
+            const pct = t.swimmers ? Math.round((t.photos / t.swimmers) * 100) : 0
+            return (
+              <tfoot>
+                <tr style={{ fontWeight: 800, borderTop: '2px solid var(--navy)', background: 'var(--soft-2)' }}>
+                  <td colSpan={3}>Total · {clubStats.length} {clubStats.length === 1 ? 'club' : 'clubs'}</td>
+                  <td className="num">{t.swimmers}</td>
+                  <td className="num">{t.entries}</td>
+                  <td style={{ minWidth: 120 }}>
+                    <div className="small" style={{ fontWeight: 800 }}>{t.photos} / {t.swimmers}</div>
+                    <div className="bar"><div style={{ width: `${pct}%` }} /></div>
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            )
+          })()}
         </table>
       </div>
     </div>
