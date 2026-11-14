@@ -73,6 +73,7 @@ export default function ClubPortal() {
                 <div className="eyebrow" style={{ color: '#d5dbfa' }}>Club registration · names and photos</div>
                 <h1 style={{ fontSize: 30, margin: '4px 0 0', color: '#fff' }}>{data.club.name}</h1>
                 {data.club.name !== data.club.code && <div className="small" style={{ color: '#d5dbfa' }}>{data.club.code}</div>}
+                <div className="small" style={{ color: '#d5dbfa', marginTop: 4 }}>To come back later: bookmark this page, or open the club registration link and choose “Already registered”.</div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 30, fontWeight: 800, color: '#fff' }}>{done} / {people.length}</div>

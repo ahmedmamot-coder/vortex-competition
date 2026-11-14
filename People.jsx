@@ -229,11 +229,35 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
     setNote(error ? error.message : 'New link made. Copy it and send it to the club.')
     reload()
   }
+  async function copyShared() {
+    const url = `${window.location.origin}/clubs`
+    try { await navigator.clipboard.writeText(url) } catch { window.prompt('Copy this link', url) }
+    setNote('Club registration link copied. Send this one link to all clubs: each club registers once and gets its own private page.')
+  }
+  async function changeCode(row, oldCode, value) {
+    const code = value.trim().toUpperCase()
+    if (!code || code === oldCode) return
+    if (byCode[code]) { setNote(`${code} is already used by another club.`); return }
+    try {
+      const c = row || await ensure(oldCode)
+      const { error } = await supabase.from('vc_clubs').update({ code }).eq('id', c.id)
+      if (error) throw new Error(error.message)
+      // Swimmers the club registered are filed under the club code: move them too.
+      await supabase.from('vc_swimmers').update({ club: code }).eq('meet_id', meet.id).eq('club', oldCode)
+      setNote(`Team code changed from ${oldCode} to ${code}.`); reload()
+    } catch (x) { setNote(x.message) }
+  }
+  async function removeClub(row, code) {
+    if (!row || !window.confirm(`Remove ${row.full_name || code} from the club list? Its link stops working. Swimmers it registered stay in Swimmers.`)) return
+    const { error } = await supabase.from('vc_clubs').delete().eq('id', row.id)
+    setNote(error ? error.message : `${row.full_name || code} removed.`); reload()
+  }
   async function rename(code, full_name) {
     try {
       const c = await ensure(code)
       if ((c.full_name || '') === full_name.trim()) return
-      await supabase.from('vc_clubs').update({ full_name: full_name.trim() || null }).eq('id', c.id)
+      const { error } = await supabase.from('vc_clubs').update({ full_name: full_name.trim() || null }).eq('id', c.id)
+      setNote(error ? error.message : `Saved: ${full_name.trim() || code}.`)
       reload()
     } catch (x) { setNote(x.message) }
   }
@@ -251,6 +275,14 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <p className="small muted" style={{ margin: 0 }}>Each club gets a private link where the coach registers the club’s swimmers with name and photo — even before the heat sheet is ready — and adds the club logo. Once the heat sheet is imported, names are matched automatically and each swimmer’s events appear. Photos show here, on badges and on the heat sheet straight away.</p>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: 12, border: '1.5px solid #c9cdf5', borderRadius: 12 }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ fontWeight: 800 }}>One link for all clubs</div>
+          <div className="small muted">Send this single link to every club. Each club registers once (name, team code, coach and mobile), then adds its logo and swimmers on its own page. Clubs come back with the coach’s mobile number.</div>
+        </div>
+        <button type="button" className="btn sm dark" onClick={copyShared}>Copy club registration link</button>
+        <a className="btn sm" href="/clubs" target="_blank" rel="noreferrer">Open</a>
+      </div>
       <form onSubmit={addClub} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 12, background: 'var(--soft-2)', borderRadius: 12 }}>
         <span className="small" style={{ fontWeight: 800 }}>Add a club</span>
         <input className="input" style={{ width: 150, minHeight: 36 }} placeholder="Team code (HY-TEK)" value={newCode} onChange={(e) => setNewCode(e.target.value)} aria-label="Team code" />
@@ -261,7 +293,7 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
       {!clubStats.length && <div className="empty">No clubs yet. Add each club above with its HY-TEK team code, then send it its link.</div>}
       <div className="table">
         <table>
-          <thead><tr><th>Logo</th><th>Code</th><th>Club name (shown at the top of their page)</th><th>Swimmers</th><th>Photos</th><th /></tr></thead>
+          <thead><tr><th>Logo</th><th>Code</th><th>Club name (click to edit)</th><th>Swimmers</th><th>Photos</th><th /></tr></thead>
           <tbody>
             {clubStats.map((c) => {
               const row = byCode[c.code]
@@ -269,8 +301,11 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
               return (
                 <tr key={c.code}>
                   <td><LogoCell row={row} code={c.code} ensure={ensure} reload={reload} setNote={setNote} /></td>
-                  <td style={{ fontWeight: 800 }}>{c.code}</td>
-                  <td><input className="input" defaultValue={row?.full_name || ''} placeholder={c.code} onBlur={(e) => rename(c.code, e.target.value)} style={{ minHeight: 34, fontSize: 13, minWidth: 200 }} aria-label={`Full name for ${c.code}`} /></td>
+                  <td><input className="input" key={`c-${c.code}`} defaultValue={c.code} onBlur={(e) => changeCode(row, c.code, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} style={{ minHeight: 34, fontSize: 13, width: 100, fontWeight: 800 }} aria-label={`Team code for ${c.code}`} /></td>
+                  <td>
+                    <input className="input" key={`n-${c.code}-${row?.full_name || ''}`} defaultValue={row?.full_name || ''} placeholder="Type the club’s full name" onBlur={(e) => rename(c.code, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} style={{ minHeight: 34, fontSize: 13, minWidth: 200 }} aria-label={`Full name for ${c.code}`} />
+                    {row?.coach_name && <div className="small muted" style={{ marginTop: 4 }}>{row.coach_name} · +974 {row.coach_mobile}{row.coach_email ? ` · ${row.coach_email}` : ''}</div>}
+                  </td>
                   <td className="num">{c.total}{!c.names.size && c.total ? <div className="small muted">registered</div> : null}</td>
                   <td style={{ minWidth: 120 }}>
                     <div className="small" style={{ fontWeight: 700 }}>{c.photos} / {c.total}</div>
@@ -282,6 +317,7 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
                       {row && <a className="btn sm" href={`/club?key=${row.access_key}`} target="_blank" rel="noreferrer">Open</a>}
                       {row && <button className="btn sm" onClick={() => newLink(c.code)}>New link</button>}
                       <button className="btn sm" disabled={!!busy} onClick={() => onBadges(c)}>Badges</button>
+                      {row && <button className="btn sm danger" onClick={() => removeClub(row, c.code)}>Remove</button>}
                     </div>
                   </td>
                 </tr>
