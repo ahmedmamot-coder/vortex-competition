@@ -6,10 +6,27 @@ import { supabase } from './supabase.js'
 // from entries are already there) or add a new one. First visit sets the coach and
 // mobile; later visits only ask for that mobile.
 // Either way the club lands on its own private page to add the logo and swimmers.
+// Country calling codes for the coach's mobile. Qatar numbers are stored as the
+// 8 digits (as before); other countries as "+<code><number>".
+const COUNTRIES = [
+  ['Qatar', '974'], ['Saudi Arabia', '966'], ['United Arab Emirates', '971'], ['Kuwait', '965'], ['Bahrain', '973'], ['Oman', '968'],
+  ['Egypt', '20'], ['Jordan', '962'], ['Lebanon', '961'], ['Syria', '963'], ['Iraq', '964'], ['Palestine', '970'], ['Yemen', '967'],
+  ['Morocco', '212'], ['Tunisia', '216'], ['Algeria', '213'], ['Libya', '218'], ['Sudan', '249'], ['Turkey', '90'], ['Iran', '98'],
+  ['India', '91'], ['Pakistan', '92'], ['Bangladesh', '880'], ['Sri Lanka', '94'], ['Nepal', '977'], ['Philippines', '63'],
+  ['Malaysia', '60'], ['Singapore', '65'], ['Indonesia', '62'], ['Thailand', '66'], ['China', '86'], ['Japan', '81'], ['South Korea', '82'],
+  ['Kazakhstan', '7'], ['Russia', '7'], ['Ukraine', '380'], ['Serbia', '381'], ['Greece', '30'], ['Cyprus', '357'], ['Italy', '39'],
+  ['Spain', '34'], ['Portugal', '351'], ['France', '33'], ['Germany', '49'], ['Netherlands', '31'], ['Belgium', '32'], ['Switzerland', '41'],
+  ['Sweden', '46'], ['Poland', '48'], ['United Kingdom', '44'], ['Ireland', '353'], ['USA / Canada', '1'], ['Brazil', '55'],
+  ['Argentina', '54'], ['Australia', '61'], ['New Zealand', '64'], ['South Africa', '27'], ['Kenya', '254'], ['Nigeria', '234'], ['Ethiopia', '251'],
+]
+const isQatar = (cc) => cc === '974'
+const fullMobile = (cc, n) => (isQatar(cc) ? n : `+${cc}${n.replace(/^0+/, '')}`)
+const mobileOk = (cc, n) => (isQatar(cc) ? /^\d{8}$/.test(n) : /^\d{6,14}$/.test(n.replace(/^0+/, '')))
+
 export default function ClubsJoin() {
   const [meet, setMeet] = useState(null)
   const [clubs, setClubs] = useState(null)
-  const [f, setF] = useState({ club_id: '', name: '', code: '', coach: '', mobile: '', email: '' })
+  const [f, setF] = useState({ club_id: '', name: '', code: '', coach: '', cc: '974', mobile: '', email: '' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -33,15 +50,16 @@ export default function ClubsJoin() {
     if (!f.club_id) return setErr('Choose your club from the list, or choose “My club is not in this list”.')
     if (isNew && f.name.trim().length < 2) return setErr('Enter your club or academy name.')
     if (!returning && f.coach.trim().split(/\s+/).length < 2) return setErr('Enter the coach or team manager’s full name.')
-    if (!/^\d{8}$/.test(f.mobile)) return setErr(returning ? 'Enter the 8-digit mobile number used to register the club.' : 'Enter an 8-digit Qatar mobile number.')
+    if (!mobileOk(f.cc, f.mobile)) return setErr(isQatar(f.cc) ? 'Enter the 8-digit Qatar mobile number.' : 'Enter the mobile number without the country code (6 to 14 digits).')
+    const mobile = fullMobile(f.cc, f.mobile)
     setBusy(true)
     if (returning) {
-      const { data, error } = await supabase.rpc('vc_club_login', { p_club_id: f.club_id, p_mobile: f.mobile })
+      const { data, error } = await supabase.rpc('vc_club_login', { p_club_id: f.club_id, p_mobile: mobile })
       setBusy(false)
       if (error || !data) return setErr('That mobile number does not match this club. Contact the organizers if you need help.')
       return go(data)
     }
-    const { data, error } = await supabase.rpc('vc_club_signup', { p_club_id: isNew ? null : f.club_id, p_name: isNew ? f.name : '', p_code: isNew ? f.code : '', p_coach: f.coach, p_mobile: f.mobile, p_email: f.email })
+    const { data, error } = await supabase.rpc('vc_club_signup', { p_club_id: isNew ? null : f.club_id, p_name: isNew ? f.name : '', p_code: isNew ? f.code : '', p_coach: f.coach, p_mobile: mobile, p_email: f.email })
     setBusy(false)
     if (error) {
       if (/already registered/.test(error.message)) { setClubs(list.map((c) => (c.id === f.club_id ? { ...c, claimed: true } : c))); return setErr('This club was already opened by its coach. Enter the mobile number used then.') }
@@ -95,8 +113,10 @@ export default function ClubsJoin() {
             <div className="field">
               <label htmlFor="cm">{returning ? 'Coach mobile used to register' : 'Mobile number'}</label>
               <div style={{ display: 'flex', gap: 8 }}>
-                <span className="input" style={{ width: 'auto', display: 'flex', alignItems: 'center', fontWeight: 700, background: 'var(--soft-2)' }}>+974</span>
-                <input id="cm" className="input" type="tel" inputMode="numeric" maxLength={8} value={f.mobile} onChange={(e) => set('mobile', e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="8 digits" />
+                <select className="input" aria-label="Country code" value={f.cc} onChange={(e) => set('cc', e.target.value)} style={{ width: 'auto', maxWidth: 170, fontWeight: 700, background: 'var(--soft-2)' }}>
+                  {COUNTRIES.map(([n, c]) => <option key={n} value={c}>+{c} {n}</option>)}
+                </select>
+                <input id="cm" className="input" type="tel" inputMode="numeric" maxLength={isQatar(f.cc) ? 8 : 15} value={f.mobile} onChange={(e) => set('mobile', e.target.value.replace(/\D/g, '').slice(0, isQatar(f.cc) ? 8 : 15))} placeholder={isQatar(f.cc) ? '8 digits' : 'Mobile number'} />
               </div>
               {!returning && <span className="small muted">You will use this number to open your club page again.</span>}
             </div>
