@@ -4,6 +4,7 @@ import { Avatar, logoToDataUrl, processPhoto, uploadPhoto } from './photos.jsx'
 import Passes from './Passes.jsx'
 import { PASS, passForPosition, usePassDesigns } from './passes.js'
 import { readEntriesPdf } from './entries.js'
+import { downloadClubMedia } from './mediazip.js'
 
 const PALETTE = ['#121236', '#1F23C9', '#3A7BE0', '#0E7C66', '#7A3FC2', '#B4461A', '#A1185A', '#4A4F6E']
 export const ATHLETE_COLOR = '#B4461A'
@@ -285,6 +286,27 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
     setNote(error ? error.message : 'New link made. Copy it and send it to the club.')
     reload()
   }
+  const [zipping, setZipping] = useState('')
+  async function downloadMedia(list) {
+    if (zipping) return
+    const items = list.map((c) => {
+      const row = byCode[c.code]
+      return {
+        code: c.code, name: row?.full_name || c.code, logo: row?.logo || null,
+        swimmers: (c.reg || []).map((x) => ({ name: x.entry_name || x.full_name, gender: x.gender, age: x.age, photo_path: x.photo_path, consent: x.guardian_consent })),
+      }
+    })
+    const photos = items.reduce((n, c) => n + c.swimmers.filter((x) => x.photo_path).length, 0)
+    const logos = items.filter((c) => c.logo).length
+    if (!photos && !logos) return setNote(list.length === 1 ? `${items[0].name} has not uploaded a logo or photos yet.` : 'No club logos or swimmer photos have been uploaded yet.')
+    setZipping(list.length === 1 ? list[0].code : 'all'); setNote('')
+    try {
+      const title = list.length === 1 ? `${items[0].name} - logo and photos` : `${meet?.name || 'Competition'} - club logos and swimmer photos`
+      const r = await downloadClubMedia({ title, clubs: items, onProgress: (d, t) => setNote(`Preparing download… ${d} of ${t} photos`) })
+      setNote(`Downloaded ${r.logos} ${r.logos === 1 ? 'logo' : 'logos'} and ${r.photos} ${r.photos === 1 ? 'photo' : 'photos'}${r.failed ? ` (${r.failed} could not be read)` : ''}. Each club has its own folder; index.csv lists every swimmer.`)
+    } catch (x) { setNote(x.message) }
+    setZipping('')
+  }
   async function copyShared() {
     const url = `${window.location.origin}/clubs`
     try { await navigator.clipboard.writeText(url) } catch { window.prompt('Copy this link', url) }
@@ -341,6 +363,13 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: 12, border: '1.5px solid #c9cdf5', borderRadius: 12 }}>
         <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ fontWeight: 800 }}>Download logos and photos</div>
+          <div className="small muted">One ZIP file with a folder per club: the club logo and every swimmer photo, named exactly as in HY-TEK, plus an index.csv list. Use “Download” on a club’s row for that club only.</div>
+        </div>
+        <button type="button" className="btn sm primary" disabled={!!zipping || !clubStats.length} onClick={() => downloadMedia(clubStats)}>{zipping === 'all' ? 'Preparing…' : 'Download all (ZIP)'}</button>
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: 12, border: '1.5px solid #c9cdf5', borderRadius: 12 }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
           <div style={{ fontWeight: 800 }}>Import club entries (HY-TEK PDF)</div>
           <div className="small muted">Upload each club’s “Entries - All Events” PDF from HY-TEK (you can select several). Swimmers and their events are added to that club with names exactly as in HY-TEK, so the club only adds photos. Importing the same club again updates it and keeps the photos.</div>
         </div>
@@ -388,6 +417,7 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
                       {row && <a className="btn sm" href={`/club?key=${row.access_key}`} target="_blank" rel="noreferrer">Open</a>}
                       {row && <button className="btn sm" onClick={() => newLink(c.code)}>New link</button>}
                       <button className="btn sm" disabled={!!busy} onClick={() => onBadges(c)}>Badges</button>
+                      <button className="btn sm" disabled={!!zipping} onClick={() => downloadMedia([c])}>{zipping === c.code ? 'Preparing…' : 'Download'}</button>
                       {row && <button className="btn sm danger" onClick={() => removeClub(row, c.code)}>Remove</button>}
                     </div>
                   </td>
