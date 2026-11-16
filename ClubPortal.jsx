@@ -22,6 +22,7 @@ export default function ClubPortal() {
   const [status, setStatus] = useState('loading')
   const [authorised, setAuthorised] = useState(false)
   const [q, setQ] = useState('')
+  const [photos, setPhotos] = useState({})
 
   const load = useCallback(async () => {
     if (key.length < 24) { setStatus('badkey'); return }
@@ -29,6 +30,8 @@ export default function ClubPortal() {
     if (error) { setStatus('error'); return }
     if (!d) { setStatus('badkey'); return }
     setData(d); setStatus('ok')
+    // Show the uploaded photos on each swimmer's card (short-lived private links).
+    supabase.functions.invoke('vc-club-photos', { body: { key } }).then(({ data: p }) => { if (p?.photos) setPhotos(p.photos) })
   }, [key])
   useEffect(() => { load() }, [load])
 
@@ -40,11 +43,11 @@ export default function ClubPortal() {
     const out = (data.swimmers || []).map((s) => {
       const r = reg.find((x) => !used.has(x.id) && (x.entry_name === s.name || x.name === s.name)) || reg.find((x) => !used.has(x.id) && sameName(x.name, s.name))
       if (r) used.add(r.id)
-      return { key: `h-${s.name}`, entryName: s.name, name: s.name, regName: r?.name, id: r?.id || null, events: s.events, has_photo: !!r?.has_photo, marketing: !!r?.marketing, onHeatSheet: true }
+      return { key: `h-${s.name}`, entryName: s.name, name: s.name, regName: r?.name, id: r?.id || null, events: s.events, has_photo: !!r?.has_photo, photo: r ? photos[r.id] : null, marketing: !!r?.marketing, onHeatSheet: true }
     })
-    reg.filter((r) => !used.has(r.id)).forEach((r) => out.push({ key: `r-${r.id}`, name: r.name, id: r.id, events: r.entries || [], imported: !!r.entries, age: r.age, has_photo: r.has_photo, marketing: r.marketing, birth_year: r.birth_year, onHeatSheet: false }))
+    reg.filter((r) => !used.has(r.id)).forEach((r) => out.push({ key: `r-${r.id}`, name: r.name, id: r.id, events: r.entries || [], imported: !!r.entries, age: r.age, has_photo: r.has_photo, photo: photos[r.id] || null, marketing: r.marketing, birth_year: r.birth_year, onHeatSheet: false }))
     return out.sort((a, b) => a.name.localeCompare(b.name))
-  }, [data])
+  }, [data, photos])
 
   const done = people.filter((s) => s.has_photo).length
   const shown = people.filter((s) => !q.trim() || s.name.toLowerCase().includes(q.trim().toLowerCase()))
@@ -225,7 +228,7 @@ function SwimmerCard({ s, k, enabled, heatSheet, onChanged }) {
     <div style={{ border: `1.5px solid ${missing ? '#f0c36d' : s.has_photo ? '#bfe3d3' : 'var(--line)'}`, borderRadius: 14, padding: 12, display: 'flex', gap: 12, background: '#fff' }}>
       <button type="button" disabled={!enabled || busy} onClick={() => fileRef.current?.click()} title={enabled ? 'Add photo' : 'Tick the confirmation box first'}
         style={{ width: 72, height: 96, borderRadius: 10, border: `2px dashed ${s.has_photo ? '#0e7c66' : '#c9cdf5'}`, background: s.has_photo ? '#e5f5ee' : '#f5f6ff', padding: 0, overflow: 'hidden', flex: 'none', cursor: enabled ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {preview ? <img src={preview} alt={`Photo of ${s.name}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {preview || s.photo ? <img src={preview || s.photo} alt={`Photo of ${s.name}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : s.has_photo ? <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#0e7c66" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
           : <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1f23c9" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5" /><path d="M5 20c1.2-3.6 4-5.5 7-5.5s5.8 1.9 7 5.5" /></svg>}
       </button>
