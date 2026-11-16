@@ -325,10 +325,30 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
       setNote(`Team code changed from ${oldCode} to ${code}.`); reload()
     } catch (x) { setNote(x.message) }
   }
+  // Removing a club deletes everything that belongs to it in this competition:
+  // the club (logo, coach details, link), its swimmers and their photos.
   async function removeClub(row, code) {
-    if (!row || !window.confirm(`Remove ${row.full_name || code} from the club list? Its link stops working. Swimmers it registered stay in Swimmers.`)) return
+    if (!row) return
+    const name = row.full_name || code
+    const { data: sw, error: e1 } = await supabase.from('vc_swimmers').select('id,photo_path').eq('meet_id', meet.id).eq('club', code)
+    if (e1) return setNote(e1.message)
+    const paths = (sw || []).map((x) => x.photo_path).filter(Boolean)
+    const what = [`the club${row.logo ? ', its logo' : ''}${row.coach_name ? ' and coach details' : ''}`, `${(sw || []).length} ${(sw || []).length === 1 ? 'swimmer' : 'swimmers'}`, `${paths.length} ${paths.length === 1 ? 'photo' : 'photos'}`]
+    if (!window.confirm(`Delete ${name} (${code}) completely?\n\nThis permanently deletes ${what.join(', ')}. Its link stops working. This cannot be undone.`)) return
+    setNote(`Deleting ${name}…`)
+    if (paths.length) {
+      for (let i = 0; i < paths.length; i += 100) {
+        const { error } = await supabase.storage.from('vc-photos').remove(paths.slice(i, i + 100))
+        if (error) return setNote(`Could not delete the photos: ${error.message}`)
+      }
+    }
+    if ((sw || []).length) {
+      const { error } = await supabase.from('vc_swimmers').delete().eq('meet_id', meet.id).eq('club', code)
+      if (error) return setNote(`Could not delete the swimmers: ${error.message}`)
+    }
     const { error } = await supabase.from('vc_clubs').delete().eq('id', row.id)
-    setNote(error ? error.message : `${row.full_name || code} removed.`); reload()
+    setNote(error ? error.message : `${name} deleted with ${what.slice(1).join(' and ')}. You can import its entries PDF again to start fresh.`)
+    reload()
   }
   async function rename(code, full_name) {
     try {
@@ -418,7 +438,7 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
                       {row && <button className="btn sm" onClick={() => newLink(c.code)}>New link</button>}
                       <button className="btn sm" disabled={!!busy} onClick={() => onBadges(c)}>Badges</button>
                       <button className="btn sm" disabled={!!zipping} onClick={() => downloadMedia([c])}>{zipping === c.code ? 'Preparing…' : 'Download'}</button>
-                      {row && <button className="btn sm danger" onClick={() => removeClub(row, c.code)}>Remove</button>}
+                      {row && <button className="btn sm danger" onClick={() => removeClub(row, c.code)}>Delete</button>}
                     </div>
                   </td>
                 </tr>
