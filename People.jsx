@@ -328,12 +328,12 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
   // Removing a club deletes everything that belongs to it in this competition:
   // the club (logo, coach details, link), its swimmers and their photos.
   async function removeClub(row, code) {
-    if (!row) return
-    const name = row.full_name || code
+    // A club can also exist only through its swimmers (club record already removed).
+    const name = row?.full_name || code
     const { data: sw, error: e1 } = await supabase.from('vc_swimmers').select('id,photo_path').eq('meet_id', meet.id).eq('club', code)
     if (e1) return setNote(e1.message)
     const paths = (sw || []).map((x) => x.photo_path).filter(Boolean)
-    const what = [`the club${row.logo ? ', its logo' : ''}${row.coach_name ? ' and coach details' : ''}`, `${(sw || []).length} ${(sw || []).length === 1 ? 'swimmer' : 'swimmers'}`, `${paths.length} ${paths.length === 1 ? 'photo' : 'photos'}`]
+    const what = [row ? `the club${row.logo ? ', its logo' : ''}${row.coach_name ? ' and coach details' : ''}` : 'the club', `${(sw || []).length} ${(sw || []).length === 1 ? 'swimmer' : 'swimmers'}`, `${paths.length} ${paths.length === 1 ? 'photo' : 'photos'}`]
     if (!window.confirm(`Delete ${name} (${code}) completely?\n\nThis permanently deletes ${what.join(', ')}. Its link stops working. This cannot be undone.`)) return
     setNote(`Deleting ${name}…`)
     if (paths.length) {
@@ -346,7 +346,7 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
       const { error } = await supabase.from('vc_swimmers').delete().eq('meet_id', meet.id).eq('club', code)
       if (error) return setNote(`Could not delete the swimmers: ${error.message}`)
     }
-    const { error } = await supabase.from('vc_clubs').delete().eq('id', row.id)
+    const { error } = row ? await supabase.from('vc_clubs').delete().eq('id', row.id) : { error: null }
     setNote(error ? error.message : `${name} deleted with ${what.slice(1).join(' and ')}. You can import its entries PDF again to start fresh.`)
     reload()
   }
@@ -438,7 +438,7 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
                       {row && <button className="btn sm" onClick={() => newLink(c.code)}>New link</button>}
                       <button className="btn sm" disabled={!!busy} onClick={() => onBadges(c)}>Badges</button>
                       <button className="btn sm" disabled={!!zipping} onClick={() => downloadMedia([c])}>{zipping === c.code ? 'Preparing…' : 'Download'}</button>
-                      {row && <button className="btn sm danger" onClick={() => removeClub(row, c.code)}>Delete</button>}
+                      {(row || c.reg.length > 0) && <button className="btn sm danger" onClick={() => removeClub(row, c.code)}>Delete</button>}
                     </div>
                   </td>
                 </tr>
