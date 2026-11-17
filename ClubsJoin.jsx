@@ -64,7 +64,14 @@ export default function ClubsJoin() {
     if (error) {
       if (/already registered/.test(error.message)) { setClubs(list.map((c) => (c.id === f.club_id ? { ...c, claimed: true } : c))); return setErr('This club was already opened by its coach. Enter the mobile number used then.') }
       if (/already listed/.test(error.message)) return setErr('This club is already in the list above. Choose it there.')
-      return setErr('Could not open the club page. Please check the details and try again.')
+      // Say exactly what is wrong, so a coach is never stuck on a vague message.
+      const m = error.message || ''
+      if (/mobile/i.test(m)) return setErr('This mobile number was not accepted. Choose the right country and type the number without the country code.')
+      if (/coach name/i.test(m)) return setErr('Enter the coach or team manager’s full name.')
+      if (/club name/i.test(m)) return setErr('Enter your club or academy name.')
+      if (/club not found|no open competition/i.test(m)) return setErr('This club is no longer open for registration. Please contact the organizers at aquaticmanager@vortexaquatics.com.')
+      if (/fetch|network|failed to/i.test(m)) return setErr('No internet connection. Check your connection and try again.')
+      return setErr(`Could not open the club page (${m.slice(0, 80)}). Please send a screenshot of this message to aquaticmanager@vortexaquatics.com.`)
     }
     go(data)
   }
