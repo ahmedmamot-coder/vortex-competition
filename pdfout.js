@@ -76,7 +76,37 @@ function photoOrPlaceholder(doc, photo, name, x, y, w, h) {
 // ---- Swimmer bag tag (marketing design "Swimmer Bag Tags | International 26") ----
 // Measured from the artwork on a 105 x 148.5 mm card: the white photo circle, and the
 // gap between the circle and the thin line above "SWIMMER. Obviously."
-const TAG = { cx: 52.5, cy: 48.6, r: 24.05, ring: 24.1, textX: 9.0, textW: 87, textTop: 73.2, textH: 9.9 }
+const TAG = { cx: 52.5, cy: 48.6, r: 24.05, textX: 9.0, textW: 87, textTop: 73.2, textH: 9.9 }
+
+// Measure the photo circle (white disc) and the thin line on the uploaded design itself,
+// so the photo always matches the artwork exactly, whatever size it was saved at.
+async function measureTag(src) {
+  const img = await loadImage(src)
+  if (!img) return { ...TAG }
+  const w = 630, h = Math.round(w * img.naturalHeight / img.naturalWidth) // 6 px per mm
+  const c = document.createElement('canvas'); c.width = w; c.height = h
+  const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(img, 0, 0, w, h)
+  const d = ctx.getImageData(0, 0, w, h).data
+  const mm = w / 105
+  let x0 = w, x1 = -1, y0 = h, y1 = -1
+  for (let y = 0; y < h * 0.55; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4
+    if (d[i] > 225 && d[i + 1] > 225 && d[i + 2] > 225) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
+  }
+  const out = { ...TAG }
+  const rr = Math.max(x1 - x0 + 1, y1 - y0 + 1) / 2 / mm
+  if (x1 > 0 && rr > 15 && rr < 32) {
+    out.cx = (x0 + x1 + 1) / 2 / mm; out.cy = (y0 + y1 + 1) / 2 / mm
+    out.r = rr + 0.12 // just over the white edge, under the design's own black ring
+  }
+  // The thin dark line above "SWIMMER.": the first mostly-dark row below the circle.
+  for (let y = Math.round((out.cy + out.r) * mm) + 2; y < h * 0.7; y++) {
+    let dark = 0
+    for (let x = Math.round(w * 0.15); x < w * 0.85; x++) { const i = (y * w + x) * 4; if (d[i] + d[i + 1] + d[i + 2] < 200) dark++ }
+    if (dark > w * 0.5) { out.textTop = y / mm - 10.4; break }
+  }
+  return out
+}
 const TAG_BLUE = '#057EE9', TAG_INK = '#0A0A14'
 const PX = 12 // canvas pixels per mm (≈ 300 dpi)
 
@@ -104,8 +134,8 @@ function loadImage(src) {
 }
 
 // Round photo (or initials) that fills the design's white circle.
-async function tagCircle(photo, name) {
-  const d = Math.round(TAG.r * 2 * PX)
+async function tagCircle(photo, name, R = TAG.r) {
+  const d = Math.round(R * 2 * PX)
   const c = document.createElement('canvas'); c.width = d; c.height = d
   const ctx = c.getContext('2d')
   ctx.beginPath(); ctx.arc(d / 2, d / 2, d / 2, 0, Math.PI * 2); ctx.closePath(); ctx.clip()
@@ -217,6 +247,7 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
   }
   const qrcode = people.some((p) => p.qr) ? await loadQR() : null
   if (people.some((p) => p.pass === 'swimmer' && art.swimmer)) await loadTagFont()
+  const tagGeo = art.swimmer ? await measureTag(art.swimmer.front) : TAG
   const needPhoto = people.map((p) => !p.pass || !art[p.pass] || PASS[p.pass]?.photo)
   const photos = await loadPhotos(people.map((p, i) => (needPhoto[i] ? p : { ...p, photoUrl: null })), onProgress)
 
@@ -255,10 +286,9 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
 
   async function drawSwimmerTag(p, photo, x, y) {
     doc.addImage(art.swimmer.front, 'JPEG', x, y, W, H, 'pass-swimmer', 'FAST')
-    doc.addImage(await tagCircle(photo, p.name), 'PNG', x + TAG.cx - TAG.r, y + TAG.cy - TAG.r, TAG.r * 2, TAG.r * 2, undefined, 'FAST')
-    // Redraw the design's thin black ring so the photo edge is clean.
-    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.circle(x + TAG.cx, y + TAG.cy, TAG.ring, 'S')
-    doc.addImage(tagText(p.name, String(p.sub || '').split(' · ')[0]), 'PNG', x + TAG.textX, y + TAG.textTop, TAG.textW, TAG.textH, undefined, 'FAST')
+    const g = tagGeo
+    doc.addImage(await tagCircle(photo, p.name, g.r), 'PNG', x + g.cx - g.r, y + g.cy - g.r, g.r * 2, g.r * 2, undefined, 'FAST')
+    doc.addImage(tagText(p.name, String(p.sub || '').split(' · ')[0]), 'PNG', x + g.textX, y + g.textTop, g.textW, g.textH, undefined, 'FAST')
   }
 
   function drawClassic(p, photo, x, y) {
