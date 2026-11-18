@@ -36,6 +36,7 @@ export default function CallRoom({ data, people, onGoSetup }) {
         <h2 style={{ fontSize: 20, marginBottom: 8, color: 'var(--navy)' }}>No heats yet</h2>
         <p>Add events and import the heat sheet in Meet Setup to start running the call room.</p>
         <button className="btn primary" onClick={onGoSetup}>Go to Meet Setup</button>
+        <div style={{ marginTop: 20, textAlign: 'left' }}><PhoneAlertTest meet={meet} /></div>
       </div>
     )
   }
@@ -169,6 +170,7 @@ export default function CallRoom({ data, people, onGoSetup }) {
                 <button className="btn sm dark" style={{ minHeight: 40 }} disabled={!custom.trim()}>Announce</button>
               </form>
               {tvNote && <div className="small muted" role="status">{tvNote}</div>}
+              <PhoneAlertTest meet={meet} />
             </div>
           </div>
 
@@ -286,5 +288,53 @@ function Chevron({ dir }) {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={dir === 'left' ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6'} />
     </svg>
+  )
+}
+
+// Practice phone alerts without a heat sheet: send First / Second / In Call to one
+// swimmer whose phone has alerts turned on (from the QR code on their pass).
+function PhoneAlertTest({ meet }) {
+  const [list, setList] = useState(null)
+  const [sid, setSid] = useState('')
+  const [busy, setBusy] = useState(0)
+  const [note, setNote] = useState('')
+  async function load() {
+    const { data: subs } = await supabase.from('vc_push_subscriptions').select('swimmer_id')
+    const ids = [...new Set((subs || []).map((x) => x.swimmer_id))]
+    if (!ids.length) { setList([]); return }
+    const { data: sw } = await supabase.from('vc_swimmers').select('id, full_name, club').in('id', ids).eq('meet_id', meet?.id)
+    const n = {}; (subs || []).forEach((x) => { n[x.swimmer_id] = (n[x.swimmer_id] || 0) + 1 })
+    setList((sw || []).map((x) => ({ ...x, phones: n[x.id] })).sort((a, b) => a.full_name.localeCompare(b.full_name)))
+  }
+  useEffect(() => { if (meet?.id) load() }, [meet?.id])
+  async function send(stage) {
+    if (!sid) return setNote('Choose a swimmer first.')
+    setBusy(stage); setNote('')
+    const { data: r, error } = await supabase.functions.invoke('vc-push', { body: { action: 'test_call', swimmer_id: sid, stage } })
+    setBusy(0)
+    setNote(error ? `Could not send: ${error.message}` : `Test ${['', 'First Call', 'Second Call', 'In Call'][stage]} sent to ${r.sent} of ${r.phones} phone${r.phones === 1 ? '' : 's'}.`)
+  }
+  return (
+    <details className="small" style={{ border: '1.5px solid #c9cdf5', borderRadius: 12, padding: '10px 12px' }} onToggle={(e) => { if (e.currentTarget.open) load() }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 800, color: 'var(--navy)' }}>Test phone alerts (no heat sheet needed)</summary>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+        <div className="muted">1. On your phone, scan a swimmer’s pass QR code and tap “Turn on alerts”. 2. Press Refresh, choose that swimmer, and send a call.</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <select className="input" style={{ width: 'auto', minWidth: 260, minHeight: 38 }} value={sid} onChange={(e) => setSid(e.target.value)} aria-label="Swimmer with alerts on">
+            <option value="">{list === null ? 'Loading…' : list.length ? 'Choose a swimmer with alerts on' : 'No phones have turned on alerts yet'}</option>
+            {(list || []).map((x) => <option key={x.id} value={x.id}>{x.full_name} · {x.club} · {x.phones} phone{x.phones === 1 ? '' : 's'}</option>)}
+          </select>
+          <button type="button" className="btn sm" onClick={load}>Refresh</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[1, 2, 3].map((st) => (
+            <button key={st} type="button" className={`btn sm ${st === 3 ? 'danger' : 'primary'}`} disabled={!!busy || !sid} onClick={() => send(st)}>
+              {busy === st ? 'Sending…' : ['', 'Send First Call', 'Send Second Call', 'Send In Call'][st]}
+            </button>
+          ))}
+        </div>
+        {note && <div role="status" style={{ fontWeight: 700 }}>{note}</div>}
+      </div>
+    </details>
   )
 }
