@@ -242,7 +242,7 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
   async function drawSwimmerTag(p, photo, x, y) {
     doc.addImage(art.swimmer.front, 'JPEG', x, y, W, H, 'pass-swimmer', 'FAST')
     doc.addImage(await tagCircle(photo, p.name), 'PNG', x + TAG.cx - TAG.r, y + TAG.cy - TAG.r, TAG.r * 2, TAG.r * 2, undefined, 'FAST')
-    doc.addImage(tagText(p.name, p.sub), 'PNG', x + TAG.textX, y + TAG.textTop, TAG.textW, TAG.textH, undefined, 'FAST')
+    doc.addImage(tagText(p.name, String(p.sub || '').split(' · ')[0]), 'PNG', x + TAG.textX, y + TAG.textTop, TAG.textW, TAG.textH, undefined, 'FAST')
   }
 
   function drawClassic(p, photo, x, y) {

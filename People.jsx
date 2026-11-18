@@ -80,7 +80,7 @@ export default function People({ data, people }) {
     })), [apps, view, urls, posGroup, groupColor, posByName])
   const swimmerRows = useMemo(() => swimmers.map((s) => ({
     kind: 'swimmer', id: s.id, raw: s, name: s.full_name, photo_path: s.photo_path, photoUrl: urls[s.photo_path] || null,
-    role: 'Athlete', sub: [clubName[s.club] || s.club, s.birth_year].filter(Boolean).join(' · '), color: ATHLETE_COLOR, marketing: s.marketing_consent, pass: 'swimmer'
+    role: 'Athlete', sub: [clubName[s.club] || s.club, s.birth_year].filter(Boolean).join(' · '), color: ATHLETE_COLOR, marketing: s.marketing_consent, pass: 'swimmer', qr: `${window.location.origin}/s/${s.id}`
   })), [swimmers, urls, clubName])
 
   const rows = (view === 'swimmers' ? swimmerRows : view === 'clubs' || view === 'passes' ? [] : staffRows)
