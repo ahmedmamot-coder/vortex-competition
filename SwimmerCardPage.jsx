@@ -125,6 +125,14 @@ function Alerts({ swimmerId, name }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const key = `vc-alerts-${swimmerId}`
+  const [flash, setFlash] = useState(null) // call received while this page is open
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const on = (ev) => { if (ev.data?.type === 'vc-call') { setFlash(ev.data); try { navigator.vibrate?.([400, 150, 400]) } catch { /* not on iPhone */ } } }
+    navigator.serviceWorker.addEventListener('message', on)
+    return () => navigator.serviceWorker.removeEventListener('message', on)
+  }, [])
 
   useEffect(() => {
     if (!supported) { setState(isIOS() && !standalone() ? 'ios-home' : 'unsupported'); return }
@@ -132,6 +140,7 @@ function Alerts({ swimmerId, name }) {
     ;(async () => {
       try {
         const reg = await navigator.serviceWorker.getRegistration('/')
+        try { await reg?.update() } catch { /* offline */ } // pick up the newest alert handler
         const sub = reg && await reg.pushManager.getSubscription()
         let on = false
         try { on = !!sub && localStorage.getItem(key) === sub.endpoint } catch { on = !!sub }
@@ -192,6 +201,12 @@ function Alerts({ swimmerId, name }) {
         </>
       )}
       {msg && <div className="small muted">{msg}</div>}
+      {flash && (
+        <div role="alert" onClick={() => setFlash(null)} style={{ background: flash.stage === 3 ? '#b4461a' : '#1f23c9', color: '#fff', borderRadius: 12, padding: '12px 14px', cursor: 'pointer' }}>
+          <div style={{ fontWeight: 900 }}>{flash.title}</div>
+          <div className="small">{flash.body}</div>
+        </div>
+      )}
     </div>
   )
 }
