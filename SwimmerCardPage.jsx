@@ -6,6 +6,8 @@ import { supabase } from './supabase.js'
 // Public page opened from the QR code on a swimmer's pass: the swimmer's events,
 // heats and lanes from this system, and a link to their results on the VIC results site.
 // No photo and no contact details are shown here.
+const PUSH_URL = 'https://qhrpwiakobgcxfmcoyfg.supabase.co/functions/v1/vc-push'
+const STAGE = { 1: 'First Call', 2: 'Second Call', 3: 'In Call', 4: 'At the blocks' }
 const pretty = (n) => (n && n.includes(',') ? `${n.split(',').slice(1).join(',').trim()} ${n.split(',')[0].trim()}` : n || '')
 
 export default function SwimmerCardPage() {
@@ -15,15 +17,21 @@ export default function SwimmerCardPage() {
 
   useEffect(() => {
     if (!/^[0-9a-f-]{36}$/i.test(id || '')) { setStatus('missing'); return }
-    supabase.rpc('vc_swimmer_card', { p_id: id }).then(({ data, error }) => {
-      if (error) setStatus('error')
+    let stop = false
+    const load = () => supabase.rpc('vc_swimmer_card', { p_id: id }).then(({ data, error }) => {
+      if (stop) return
+      if (error) setStatus((s) => (s === 'ok' ? s : 'error'))
       else if (!data) setStatus('missing')
       else { setD(data); setStatus('ok') }
     })
+    load()
+    const t = setInterval(load, 20000) // keep the call status fresh while the page is open
+    return () => { stop = true; clearInterval(t) }
   }, [id])
 
   const heats = d?.heats || []
   const entries = d?.entries || []
+  const live = heats.filter((h) => !h.scratched && h.stage >= 1 && h.stage <= 3)
   return (
     <div className="vx-page">
       <header style={{ borderBottom: '1px solid var(--line)' }}>
@@ -47,6 +55,16 @@ export default function SwimmerCardPage() {
             </div>
             <div className="small muted">{[d.meet?.name, d.meet?.venue, d.meet?.date].filter(Boolean).join(' · ')}</div>
 
+            {live.map((h, i) => (
+              <div key={i} role="status" style={{ background: h.stage === 3 ? '#b4461a' : '#1f23c9', color: '#fff', borderRadius: 14, padding: '14px 16px' }}>
+                <div style={{ fontWeight: 900, fontSize: 20 }}>{STAGE[h.stage]}</div>
+                <div style={{ fontWeight: 700 }}>Event {h.event_no} · {h.event} · Heat {h.heat} · Lane {h.lane}</div>
+                <div className="small" style={{ opacity: 0.9 }}>{h.stage === 3 ? 'Go to the Call Room now.' : 'Please report to the Call Room.'}</div>
+              </div>
+            ))}
+
+            <Alerts swimmerId={d.id} name={pretty(d.name)} />
+
             {d.results_url && <a className="btn primary" style={{ minHeight: 52, justifyContent: 'center' }} href={d.results_url}>Results and live times</a>}
 
             <div>
@@ -58,6 +76,7 @@ export default function SwimmerCardPage() {
                       <div>
                         <div style={{ fontWeight: 800 }}>Event {h.event_no} · {h.event}</div>
                         <div className="small muted">Heat {h.heat} of {h.heats}{h.seed ? ` · Entry time ${h.seed}` : ''}{h.scratched ? ' · Withdrawn' : ''}</div>
+                        {!h.scratched && h.stage >= 1 && <div className="small" style={{ fontWeight: 800, color: h.stage === 3 ? '#b4461a' : '#1f23c9' }}>{STAGE[h.stage]}</div>}
                       </div>
                       <div style={{ textAlign: 'center', minWidth: 54 }}>
                         <div className="small muted">Lane</div>
@@ -88,6 +107,91 @@ export default function SwimmerCardPage() {
           <img src={d.meet.sponsor_banner} alt="Meet sponsors" style={{ maxWidth: 'min(100%, 720px)', maxHeight: 80, objectFit: 'contain' }} />
         </footer>
       )}
+    </div>
+  )
+}
+
+// ---- Call Room phone alerts ----
+function b64ToBytes(b64) {
+  const s = (b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')
+  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
+}
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+const standalone = () => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true
+
+function Alerts({ swimmerId, name }) {
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+  const [state, setState] = useState('checking') // checking | off | on | blocked | unsupported | ios-home
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const key = `vc-alerts-${swimmerId}`
+
+  useEffect(() => {
+    if (!supported) { setState(isIOS() && !standalone() ? 'ios-home' : 'unsupported'); return }
+    if (Notification.permission === 'denied') { setState('blocked'); return }
+    ;(async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration('/')
+        const sub = reg && await reg.pushManager.getSubscription()
+        let on = false
+        try { on = !!sub && localStorage.getItem(key) === sub.endpoint } catch { on = !!sub }
+        setState(on ? 'on' : 'off')
+      } catch { setState('off') }
+    })()
+  }, [supported, key])
+
+  async function turnOn() {
+    setBusy(true); setMsg('')
+    try {
+      const perm = await Notification.requestPermission()
+      if (perm !== 'granted') { setState(perm === 'denied' ? 'blocked' : 'off'); setBusy(false); return }
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      await navigator.serviceWorker.ready
+      const { publicKey } = await (await fetch(PUSH_URL)).json()
+      let sub = await reg.pushManager.getSubscription()
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) })
+      const j = sub.toJSON()
+      const r = await fetch(PUSH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'subscribe', swimmer_id: swimmerId, subscription: j }) })
+      if (!r.ok) throw new Error('Could not save the alerts. Please try again.')
+      try { localStorage.setItem(key, j.endpoint) } catch { /* ignore */ }
+      await fetch(PUSH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'test', subscription: j }) })
+      setState('on'); setMsg('Done. A test alert was sent to this phone.')
+    } catch (x) { setMsg(x.message || 'Could not turn on alerts on this phone.') }
+    setBusy(false)
+  }
+  async function turnOff() {
+    setBusy(true)
+    try {
+      const reg = await navigator.serviceWorker.getRegistration('/')
+      const sub = reg && await reg.pushManager.getSubscription()
+      if (sub) await fetch(PUSH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unsubscribe', swimmer_id: swimmerId, endpoint: sub.endpoint }) })
+      try { localStorage.removeItem(key) } catch { /* ignore */ }
+      setState('off'); setMsg('Alerts are off for this swimmer on this phone.')
+    } catch { setMsg('Could not turn off alerts. Please try again.') }
+    setBusy(false)
+  }
+
+  return (
+    <div style={{ border: '1.5px solid #c9cdf5', borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 8, background: '#f5f6ff' }}>
+      <div style={{ fontWeight: 800, color: 'var(--navy)' }}>Call Room alerts on this phone</div>
+      {state === 'on' ? (
+        <>
+          <div className="small">✓ On. This phone will ring and vibrate at <strong>First Call</strong>, <strong>Second Call</strong> and <strong>In Call</strong> for {name}’s heats — no need to keep this page open.</div>
+          <button className="btn sm" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={turnOff}>Turn off alerts</button>
+        </>
+      ) : state === 'ios-home' ? (
+        <div className="small">On iPhone, alerts work from the Home Screen: tap <strong>Share</strong> <span aria-hidden="true">⎋</span> → <strong>Add to Home Screen</strong>, open Vortex from the Home Screen, then tap <strong>Turn on alerts</strong> here.</div>
+      ) : state === 'unsupported' ? (
+        <div className="small">This browser cannot receive alerts. Open this page in Chrome (Android) or Safari (iPhone, from the Home Screen).</div>
+      ) : state === 'blocked' ? (
+        <div className="small">Notifications are blocked for this site. Allow notifications for vortex-competition.vercel.app in your phone settings, then come back.</div>
+      ) : (
+        <>
+          <div className="small">Get a phone alert when {name}’s heat is called to the Call Room (First Call, Second Call, In Call).</div>
+          <button className="btn primary" style={{ alignSelf: 'flex-start' }} disabled={busy || state === 'checking'} onClick={turnOn}>{busy ? 'Turning on…' : 'Turn on alerts'}</button>
+        </>
+      )}
+      {msg && <div className="small muted">{msg}</div>}
     </div>
   )
 }

@@ -50,6 +50,13 @@ export default function CallRoom({ data, people, onGoSetup }) {
     data.setHeats((hs) => hs.map((x) => (x.id === h.id ? { ...x, call_stage: s, updated_at } : x)))
     await supabase.from('vc_heats').update({ call_stage: s, updated_at }).eq('id', h.id)
     if (autoTv && s >= 1 && s <= 3) announce(h, s)
+    // Phone alerts to the swimmers in this heat who turned them on.
+    if (s >= 1 && s <= 3) {
+      supabase.functions.invoke('vc-push', { body: { action: 'call', heat_id: h.id, stage: s } }).then(({ data: r, error }) => {
+        if (error) setTvNote(`Phone alerts could not be sent: ${error.message}`)
+        else if (r?.phones) setTvNote(`Phone alerts: ${['', 'First Call', 'Second Call', 'In Call'][s]} sent to ${r.sent} of ${r.phones} phones (${heatCode(h)}).`)
+      })
+    }
   }
 
   // ---- Spectator TV voice-over ----
