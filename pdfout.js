@@ -111,21 +111,25 @@ async function tagCircle(photo, name) {
   ctx.beginPath(); ctx.arc(d / 2, d / 2, d / 2, 0, Math.PI * 2); ctx.closePath(); ctx.clip()
   const img = photo ? await loadImage(photo) : null
   if (img) {
-    // Show the whole head with all the hair: zoom out a little and start just above
-    // the top of the photo, so nothing on top is cut by the circle.
+    // Fill the whole circle with the photo (no empty bands), keeping the full head:
+    // 1. ignore plain white padding some photos have around them;
+    // 2. take a square from the top of the photo, centred left-right.
     const iw = img.naturalWidth, ih = img.naturalHeight
-    const side = Math.min(iw, ih)
-    const sx = (iw - side) / 2, sy = -side * 0.08
-    const k = d / side
-    // The small strip above the photo is filled with the photo's own background colour.
-    const t = document.createElement('canvas'); t.width = iw; t.height = 1
-    const tc = t.getContext('2d'); tc.drawImage(img, 0, 0, iw, 1, 0, 0, iw, 1)
-    const row = tc.getImageData(0, 0, iw, 1).data
-    let rr = 0, gg = 0, bb = 0
-    for (let i = 0; i < row.length; i += 4) { rr += row[i]; gg += row[i + 1]; bb += row[i + 2] }
-    const n = row.length / 4
-    ctx.fillStyle = `rgb(${Math.round(rr / n)},${Math.round(gg / n)},${Math.round(bb / n)})`; ctx.fillRect(0, 0, d, d)
-    ctx.drawImage(img, -sx * k, -sy * k, iw * k, ih * k)
+    const t = document.createElement('canvas'); t.width = iw; t.height = ih
+    const tc = t.getContext('2d', { willReadFrequently: true }); tc.drawImage(img, 0, 0)
+    const px = tc.getImageData(0, 0, iw, ih).data
+    const ink = (x, y) => { const i = (y * iw + x) * 4; return px[i] < 246 || px[i + 1] < 246 || px[i + 2] < 246 }
+    let x0 = iw, x1 = -1, y0 = ih, y1 = -1
+    for (let y = 0; y < ih; y += 2) for (let x = 0; x < iw; x += 2) if (ink(x, y)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
+    if (x1 < 0) { x0 = 0; y0 = 0; x1 = iw - 1; y1 = ih - 1 }
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1
+    const side = Math.min(bw, bh)
+    const sx = x0 + (bw - side) / 2
+    // A little space above the hair when the background is white, never past the photo.
+    const padded = x0 > iw * 0.02 || x1 < iw * 0.98 // photo sits inside white padding
+    const sy = Math.max(0, Math.min(padded ? y0 : y0 - side * 0.06, ih - side))
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, d, d)
+    ctx.drawImage(img, sx, sy, side, Math.min(side, ih - sy), 0, 0, d, d * Math.min(side, ih - sy) / side)
   } else {
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, d, d)
     ctx.fillStyle = TAG_BLUE; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
