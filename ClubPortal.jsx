@@ -92,11 +92,11 @@ export default function ClubPortal() {
                 {heatSheet
                   ? 'The heat sheet is published: swimmers from it are listed with their events. Add a clear head-and-shoulders photo for each one.'
                   : 'The heat sheet is not ready yet, so you can start now: add each swimmer’s name and photo below. When the heat sheet is published, their events will appear here automatically.'}
-                {' '}Photos are used on accreditation badges and on the officials’ heat sheets, and are visible only to the meet organizers.
+                {' '}Adding a photo confirms the parents’ approval: it is used on the accreditation pass, the officials’ heat sheets, the results site and Vortex event media.
               </p>
               <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14, color: 'var(--ink-2)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={authorised} onChange={(e) => setAuthorised(e.target.checked)} style={{ width: 20, height: 20, margin: '1px 0 0', accentColor: '#1f23c9', flex: 'none' }} />
-                <span>I am the club’s coach or team manager and the swimmers’ parents or guardians have agreed that these photos are used for accreditation and by meet officials.</span>
+                <span>I am the club’s coach or team manager and the swimmers’ parents or guardians have approved these photos for the accreditation pass, the officials’ heat sheets, the results site and Vortex event media.</span>
               </label>
             </div>
 
@@ -146,7 +146,7 @@ function AddSwimmer({ k, enabled, onAdded }) {
     setBusy(true); setErr('')
     try {
       const path = await uploadPhoto('swimmers', photo.blob)
-      const { error } = await supabase.rpc('vc_club_save_swimmer', { p_key: k, p_id: null, p_name: name, p_path: path, p_marketing: marketing, p_birth_year: year ? +year : null })
+      const { error } = await supabase.rpc('vc_club_save_swimmer', { p_key: k, p_id: null, p_name: name, p_path: path, p_marketing: true, p_birth_year: year ? +year : null })
       if (error) throw new Error('The swimmer could not be saved. Please try again.')
       setOk(`${name.trim()} added.`); setName(''); setYear(''); setPhoto(null); setMarketing(false); onAdded()
     } catch (x) { setErr(x.message) }
@@ -166,9 +166,6 @@ function AddSwimmer({ k, enabled, onAdded }) {
           <input className="input" style={{ flex: 2, minWidth: 220 }} placeholder="Name exactly as in HY-TEK / entry sheet" value={name} onChange={(e) => setName(e.target.value)} aria-label="Swimmer name" disabled={!enabled} />
           <input className="input num" style={{ width: 120 }} inputMode="numeric" maxLength={4} placeholder="Birth year" value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, '').slice(0, 4))} aria-label="Year of birth" disabled={!enabled} />
         </div>
-        <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} disabled={!enabled} style={{ accentColor: '#1f23c9' }} /> Parents agree to marketing use
-        </label>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="btn sm primary" disabled={busy || !enabled}>{busy ? 'Saving…' : 'Add swimmer'}</button>
           {!enabled && <span className="small muted">Tick the confirmation box above to start.</span>}
@@ -198,8 +195,8 @@ function SwimmerCard({ s, k, enabled, heatSheet, onChanged }) {
       const { blob, preview: pv } = await processPhoto(file)
       const path = await uploadPhoto('swimmers', blob)
       const { error } = s.id
-        ? await supabase.rpc('vc_club_save_swimmer', { p_key: k, p_id: s.id, p_name: s.regName || s.name, p_path: path, p_marketing: marketing, p_birth_year: null })
-        : await supabase.rpc('vc_club_set_photo', { p_key: k, p_name: s.entryName, p_path: path, p_marketing: marketing })
+        ? await supabase.rpc('vc_club_save_swimmer', { p_key: k, p_id: s.id, p_name: s.regName || s.name, p_path: path, p_marketing: true, p_birth_year: null })
+        : await supabase.rpc('vc_club_set_photo', { p_key: k, p_name: s.entryName, p_path: path, p_marketing: true })
       if (error) throw new Error('The photo could not be saved. Please try again.')
       setPreview(pv); onChanged()
     } catch (x) { setErr(x.message) }
@@ -248,10 +245,6 @@ function SwimmerCard({ s, k, enabled, heatSheet, onChanged }) {
             ))}
           </div>
         ) : <div className="small muted">{missing ? 'Not found on the heat sheet — check the spelling.' : 'Events appear when the heat sheet is published.'}{s.birth_year ? ` · Born ${s.birth_year}` : ''}</div>}
-        <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4, cursor: 'pointer' }}>
-          <input type="checkbox" checked={marketing} onChange={(e) => toggleMarketing(e.target.checked)} style={{ accentColor: '#1f23c9' }} disabled={busy || !enabled} />
-          Parents agree to marketing use
-        </label>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
           <button type="button" className={`btn sm ${s.has_photo ? '' : 'primary'}`} disabled={!enabled || busy} onClick={() => fileRef.current?.click()}>
             {busy ? 'Saving…' : s.has_photo ? 'Replace photo' : 'Add photo'}

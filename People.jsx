@@ -177,9 +177,9 @@ export default function People({ data, people }) {
         ) : view === 'clubs' ? (
           <ClubsTable clubStats={clubStats} clubs={clubs} meet={meet} reload={loadClubs} busy={busy}
             onBadges={(c) => printBadges((c.names.size
-              ? [...c.names].sort().map((n) => ({ name: n, photoUrl: people.photoForEntry({ swimmer_name: n }) }))
-              : c.reg.map((x) => ({ name: x.full_name, photoUrl: urls[x.photo_path] || null })).sort((a, b) => a.name.localeCompare(b.name))
-            ).map((x) => ({ ...x, role: 'Athlete', sub: clubName[c.code] || c.code, color: ATHLETE_COLOR, id: null, pass: 'swimmer' })), `club-${c.code}`)} />
+              ? [...c.names].sort().map((n) => ({ name: n, photoUrl: people.photoForEntry({ swimmer_name: n }), sid: (c.reg.find((r) => (r.entry_name || r.full_name || '').toLowerCase().trim() === n.toLowerCase().trim()) || people.swimmerFor(n))?.id }))
+              : c.reg.map((x) => ({ name: x.full_name, photoUrl: urls[x.photo_path] || null, sid: x.id })).sort((a, b) => a.name.localeCompare(b.name))
+            ).map(({ sid, ...x }) => ({ ...x, qr: sid ? `${window.location.origin}/s/${sid}` : null, role: 'Athlete', sub: clubName[c.code] || c.code, color: ATHLETE_COLOR, id: null, pass: 'swimmer' })), `club-${c.code}`)} />
         ) : <>
         <div className="small muted">
           {chosen.length ? `${chosen.length} selected — only these will be printed. ` : 'Tick people to print only some badges. '}

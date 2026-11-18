@@ -76,6 +76,26 @@ function photoOrPlaceholder(doc, photo, name, x, y, w, h) {
 // people: [{ name, photoUrl, role, sub, color, id, pass }]
 // designs: { coach: { front, back }, ... } signed URLs of the pass artwork (optional).
 // Holders whose pass has artwork are printed on it; others get the plain Vortex badge.
+// QR codes are drawn with qrcode-generator, loaded on demand like jsPDF.
+let qrLib
+function loadQR() {
+  if (window.qrcode) return Promise.resolve(window.qrcode)
+  return (qrLib = qrLib || new Promise((ok, fail) => {
+    const s = document.createElement('script')
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'
+    s.onload = () => ok(window.qrcode)
+    s.onerror = () => { qrLib = null; fail(new Error('Could not load the QR code tool. Check the internet connection.')) }
+    document.head.appendChild(s)
+  }))
+}
+function drawQR(doc, qrcode, text, x, y, size) {
+  const q = qrcode(0, 'M'); q.addData(text); q.make()
+  const n = q.getModuleCount(), pad = 1.5, cell = (size - pad * 2) / n
+  doc.setFillColor(255, 255, 255); doc.roundedRect(x, y, size, size, 1.5, 1.5, 'F')
+  doc.setFillColor(11, 16, 64)
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) doc.rect(x + pad + c * cell, y + pad + r * cell, cell + 0.02, cell + 0.02, 'F')
+}
+
 export async function badgesPdf({ people, meet, designs = {}, backs = false, onProgress }) {
   const { jsPDF } = await loadJsPDF()
   const { PASS, PHOTO_SLOT, LAYOUT, photoTemplate } = await import('./passes.js')
@@ -94,6 +114,7 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
       back: d.back ? await urlToDataUrl(d.back, 1240) : null
     }
   }
+  const qrcode = people.some((p) => p.qr) ? await loadQR() : null
   const needPhoto = people.map((p) => !p.pass || !art[p.pass] || PASS[p.pass]?.photo)
   const photos = await loadPhotos(people.map((p, i) => (needPhoto[i] ? p : { ...p, photoUrl: null })), onProgress)
 
@@ -168,6 +189,12 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
       const y = paired ? k * H : Math.floor(k / 2) * H
       if (p.pass && art[p.pass]) drawPass(p, photos[start + k], x, y)
       else drawClassic(p, photos[start + k], x, y)
+      // Personal QR (swimmers): opens their races, heats, lanes and results.
+      if (p.qr && qrcode) {
+        drawQR(doc, qrcode, p.qr, x + W - 23, y + 5, 18)
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(4.5); doc.setTextColor(120, 124, 150)
+        doc.text('MY RACES', x + W - 14, y + 25.2, { align: 'center' })
+      }
       const b = paired && art[p.pass]?.back
       if (b) doc.addImage(b, 'JPEG', W, y, W, H, `back-${p.pass}`, 'FAST')
     })

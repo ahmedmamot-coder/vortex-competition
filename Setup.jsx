@@ -330,6 +330,19 @@ export default function Setup({ data }) {
           </div>
 
           <Sponsors meet={meet} reload={data.reload} say={say} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, border: '1.5px solid #c9cdf5', borderRadius: 12 }}>
+            <div style={{ fontWeight: 800 }}>Swimmer results link (QR on swimmer passes)</div>
+            <div className="small muted">Each swimmer pass has a QR code that opens the swimmer’s own page: events, heats and lanes. Paste the VIC results site address for one swimmer here, with {'{id}'} where the swimmer id goes, and the page shows a “Results and live times” button. Example: https://your-results-site.netlify.app/swimmer/{'{id}'}</div>
+            <input className="input" key={`r-${meet.results_url || ''}`} defaultValue={meet.results_url || ''} placeholder="https://…/swimmer/{id}"
+              onBlur={async (e) => {
+                const v = e.target.value.trim()
+                if (v === (meet.results_url || '')) return
+                if (v && (!/^https:\/\//.test(v) || !v.includes('{id}'))) return say('error', 'The results link must start with https:// and contain {id}.')
+                const { error } = await supabase.from('vc_meet').update({ results_url: v || null }).eq('id', meet.id)
+                if (error) say('error', error.message); else { say('ok', v ? 'Results link saved.' : 'Results link removed.'); data.reload() }
+              }} />
+          </div>
         </div>
       </div>
 

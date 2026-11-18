@@ -9,6 +9,7 @@ import HeatSheet from './HeatSheet.jsx'
 import ClubPortal from './ClubPortal.jsx'
 import ClubsJoin from './ClubsJoin.jsx'
 import UpdateBanner from './UpdateBanner.jsx'
+import SwimmerCardPage from './SwimmerCardPage.jsx'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       <Route path="/swimmer" element={<SwimmerRegister />} />
       <Route path="/club" element={<ClubPortal />} />
       <Route path="/clubs" element={<ClubsJoin />} />
+      <Route path="/s/:id" element={<SwimmerCardPage />} />
       <Route path="/heatsheet" element={<AuthGate><HeatSheet /></AuthGate>} />
       <Route path="/board" element={<AuthGate><Board /></AuthGate>} />
       <Route path="/" element={<AuthGate><Console /></AuthGate>} />
