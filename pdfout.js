@@ -111,10 +111,21 @@ async function tagCircle(photo, name) {
   ctx.beginPath(); ctx.arc(d / 2, d / 2, d / 2, 0, Math.PI * 2); ctx.closePath(); ctx.clip()
   const img = photo ? await loadImage(photo) : null
   if (img) {
-    // Cover the circle; keep the upper part of portrait photos (the face).
-    const s = Math.min(img.naturalWidth, img.naturalHeight)
-    const sx = (img.naturalWidth - s) / 2, sy = Math.max(0, (img.naturalHeight - s) * 0.22)
-    ctx.drawImage(img, sx, sy, s, s, 0, 0, d, d)
+    // Show the whole head with all the hair: zoom out a little and start just above
+    // the top of the photo, so nothing on top is cut by the circle.
+    const iw = img.naturalWidth, ih = img.naturalHeight
+    const side = Math.min(iw, ih)
+    const sx = (iw - side) / 2, sy = -side * 0.08
+    const k = d / side
+    // The small strip above the photo is filled with the photo's own background colour.
+    const t = document.createElement('canvas'); t.width = iw; t.height = 1
+    const tc = t.getContext('2d'); tc.drawImage(img, 0, 0, iw, 1, 0, 0, iw, 1)
+    const row = tc.getImageData(0, 0, iw, 1).data
+    let rr = 0, gg = 0, bb = 0
+    for (let i = 0; i < row.length; i += 4) { rr += row[i]; gg += row[i + 1]; bb += row[i + 2] }
+    const n = row.length / 4
+    ctx.fillStyle = `rgb(${Math.round(rr / n)},${Math.round(gg / n)},${Math.round(bb / n)})`; ctx.fillRect(0, 0, d, d)
+    ctx.drawImage(img, -sx * k, -sy * k, iw * k, ih * k)
   } else {
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, d, d)
     ctx.fillStyle = TAG_BLUE; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
