@@ -402,3 +402,56 @@ export async function photoBookPdf({ sections, meet, onProgress }) {
   footer()
   return doc
 }
+
+// Staff profiles: one A4 page per person, all in one PDF (organizers only — contains QID and bank details).
+export async function staffProfilesPdf({ people, meet, onProgress }) {
+  const { jsPDF } = await loadJsPDF()
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const logo = await logoPng()
+  const photos = await loadPhotos(people, onProgress)
+  const W = 210, M = 18
+  people.forEach((a, i) => {
+    if (i) doc.addPage()
+    if (logo) { const lw = 46, lh = lw / logo.ratio; doc.addImage(logo.data, 'PNG', M, 14, lw, lh, 'vc-logo', 'FAST') }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...MUTED)
+    doc.text(pdfText(meet?.name || 'Vortex Competition'), W - M, 18, { align: 'right' })
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8)
+    doc.text('Staff profile - confidential', W - M, 23, { align: 'right' })
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.4); doc.line(M, 34, W - M, 34)
+    // Photo and name
+    photoOrPlaceholder(doc, photos[i], a.full_name, M, 42, 42, 56)
+    doc.setDrawColor(...LINE); doc.rect(M, 42, 42, 56)
+    const tx = M + 50
+    doc.setTextColor(...NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(20)
+    doc.text(doc.splitTextToSize(pdfText(a.full_name), W - tx - M).slice(0, 2), tx, 52)
+    doc.setFontSize(12); doc.setTextColor(31, 35, 201)
+    doc.text(pdfText(`${a.position}${a.group && a.group !== a.position ? ' - ' + a.group : ''}`), tx, 68)
+    const st = String(a.status || '').toUpperCase()
+    const col = a.status === 'approved' ? [14, 124, 102] : a.status === 'declined' ? [190, 40, 50] : [176, 120, 10]
+    doc.setFillColor(...col); doc.roundedRect(tx, 74, doc.getTextWidth(st) * 0.75 + 8, 7, 3.5, 3.5, 'F')
+    doc.setTextColor(255, 255, 255); doc.setFontSize(8.5); doc.text(st, tx + 4, 78.8)
+    // Details
+    const rows = [
+      ['QID', a.qid], ['Mobile', `+974 ${a.mobile}`], ['Email', a.email || '-'],
+      ['Bank', a.bank_name || '-'], ['Account holder', a.account_holder || '-'], ['IBAN', a.iban || '-'],
+      ['Fawran mobile', a.fawran_mobile ? `+974 ${a.fawran_mobile}` : '-'],
+      ['Photo & badge consent', a.consent ? 'Yes' : 'No'], ['Marketing use', a.marketing_consent ? 'Yes' : 'No'],
+      ['Registered', new Date(a.created_at).toLocaleString('en-GB')],
+      ...(a.admin_note ? [['Note', a.admin_note]] : []),
+    ]
+    let y = 112
+    rows.forEach(([k, v], j) => {
+      const lines = doc.splitTextToSize(pdfText(String(v ?? '-')), W - M * 2 - 62)
+      const h = Math.max(10, lines.length * 5 + 5)
+      if (j % 2 === 0) { doc.setFillColor(246, 247, 252); doc.rect(M, y, W - M * 2, h, 'F') }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...MUTED)
+      doc.text(k, M + 4, y + 6.5)
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(...NAVY)
+      doc.text(lines, M + 62, y + 6.5)
+      y += h
+    })
+    doc.setFontSize(7.5); doc.setTextColor(150, 152, 170)
+    doc.text(`${i + 1} / ${people.length}  ·  Printed ${new Date().toLocaleDateString('en-GB')}`.replace('·', '-'), W / 2, 289, { align: 'center' })
+  })
+  return doc
+}
