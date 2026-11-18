@@ -73,6 +73,79 @@ function photoOrPlaceholder(doc, photo, name, x, y, w, h) {
   doc.text(initials(name) || '?', x + w / 2, y + h / 2, { align: 'center', baseline: 'middle' })
 }
 
+// ---- Swimmer bag tag (marketing design "Swimmer Bag Tags | International 26") ----
+// Measured from the artwork on a 105 x 148.5 mm card: the white photo circle, and the
+// gap between the circle and the thin line above "SWIMMER. Obviously."
+const TAG = { cx: 52.55, cy: 48.57, r: 23.45, textX: 9.0, textW: 87, textTop: 73.2, textH: 9.9 }
+const TAG_BLUE = '#057EE9', TAG_INK = '#0A0A14'
+const PX = 12 // canvas pixels per mm (≈ 300 dpi)
+
+let fontReady
+function loadTagFont() {
+  // Closest free match to the design's grotesk lettering (the PDF has it as outlines).
+  return (fontReady = fontReady || (async () => {
+    try {
+      if (!document.querySelector('link[data-tag-font]')) {
+        const l = document.createElement('link')
+        l.rel = 'stylesheet'; l.dataset.tagFont = '1'
+        l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
+        document.head.appendChild(l)
+        await new Promise((ok) => { l.onload = ok; l.onerror = ok; setTimeout(ok, 4000) })
+      }
+      await Promise.all(['500', '600'].map((w) => document.fonts.load(`${w} 48px Inter`)))
+    } catch { /* falls back to the system sans-serif */ }
+  })())
+}
+const FONT = "Inter, 'Helvetica Neue', Arial, sans-serif"
+const displayName = (n) => (n && n.includes(',') ? `${n.split(',').slice(1).join(',').trim()} ${n.split(',')[0].trim()}` : String(n || '')).replace(/\s+/g, ' ').trim()
+
+function loadImage(src) {
+  return new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src })
+}
+
+// Round photo (or initials) that fills the design's white circle.
+async function tagCircle(photo, name) {
+  const d = Math.round(TAG.r * 2 * PX)
+  const c = document.createElement('canvas'); c.width = d; c.height = d
+  const ctx = c.getContext('2d')
+  ctx.beginPath(); ctx.arc(d / 2, d / 2, d / 2, 0, Math.PI * 2); ctx.closePath(); ctx.clip()
+  const img = photo ? await loadImage(photo) : null
+  if (img) {
+    // Cover the circle; keep the upper part of portrait photos (the face).
+    const s = Math.min(img.naturalWidth, img.naturalHeight)
+    const sx = (img.naturalWidth - s) / 2, sy = Math.max(0, (img.naturalHeight - s) * 0.22)
+    ctx.drawImage(img, sx, sy, s, s, 0, 0, d, d)
+  } else {
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, d, d)
+    ctx.fillStyle = TAG_BLUE; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.font = `600 ${Math.round(d * 0.3)}px ${FONT}`
+    ctx.fillText(initials(displayName(name)) || '?', d / 2, d / 2 + d * 0.02)
+  }
+  return c.toDataURL('image/png')
+}
+
+// Name (white) and club (ink) set left-aligned like "SWIMMER. Obviously.".
+function tagText(name, club) {
+  const w = Math.round(TAG.textW * PX), h = Math.round(TAG.textH * PX)
+  const c = document.createElement('canvas'); c.width = w; c.height = h
+  const ctx = c.getContext('2d')
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left'
+  let size = 7.4 * PX
+  const nm = displayName(name)
+  do { ctx.font = `500 ${size}px ${FONT}`; size -= 0.2 * PX } while (ctx.measureText(nm).width > w && size > 3.6 * PX)
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(nm, 0, 6.0 * PX)
+  if (club) {
+    const cl = String(club).toUpperCase()
+    let cs = 2.5 * PX
+    try { ctx.letterSpacing = `${0.12 * PX}px` } catch { /* older browsers */ }
+    do { ctx.font = `600 ${cs}px ${FONT}`; cs -= 0.1 * PX } while (ctx.measureText(cl).width > w && cs > 1.6 * PX)
+    ctx.fillStyle = TAG_INK
+    ctx.fillText(cl, 0, 9.2 * PX)
+  }
+  return c.toDataURL('image/png')
+}
+
 // people: [{ name, photoUrl, role, sub, color, id, pass }]
 // designs: { coach: { front, back }, ... } signed URLs of the pass artwork (optional).
 // Holders whose pass has artwork are printed on it; others get the plain Vortex badge.
@@ -112,11 +185,13 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
   for (const kind of new Set(people.map((p) => p.pass).filter((k) => designs[k]?.front))) {
     const d = designs[kind]
     art[kind] = {
-      front: PASS[kind]?.photo ? await photoTemplate(d.front) : await urlToDataUrl(d.front, 1240),
+      // The swimmer bag tag is printed exactly as designed (photo goes in its circle).
+      front: kind === 'swimmer' ? await urlToDataUrl(d.front, 1400) : PASS[kind]?.photo ? await photoTemplate(d.front) : await urlToDataUrl(d.front, 1240),
       back: d.back ? await urlToDataUrl(d.back, 1240) : null
     }
   }
   const qrcode = people.some((p) => p.qr) ? await loadQR() : null
+  if (people.some((p) => p.pass === 'swimmer' && art.swimmer)) await loadTagFont()
   const needPhoto = people.map((p) => !p.pass || !art[p.pass] || PASS[p.pass]?.photo)
   const photos = await loadPhotos(people.map((p, i) => (needPhoto[i] ? p : { ...p, photoUrl: null })), onProgress)
 
@@ -153,6 +228,12 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
     }
   }
 
+  async function drawSwimmerTag(p, photo, x, y) {
+    doc.addImage(art.swimmer.front, 'JPEG', x, y, W, H, 'pass-swimmer', 'FAST')
+    doc.addImage(await tagCircle(photo, p.name), 'PNG', x + TAG.cx - TAG.r, y + TAG.cy - TAG.r, TAG.r * 2, TAG.r * 2, undefined, 'FAST')
+    doc.addImage(tagText(p.name, p.sub), 'PNG', x + TAG.textX, y + TAG.textTop, TAG.textW, TAG.textH, undefined, 'FAST')
+  }
+
   function drawClassic(p, photo, x, y) {
     const color = hex(p.color || '#1F23C9')
     doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.roundedRect(x + W / 2 - 7, y + 4, 14, 3, 1.5, 1.5)
@@ -186,20 +267,23 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
   for (let start = 0; start < people.length; start += per) {
     if (start) doc.addPage()
     const group = people.slice(start, start + per)
-    group.forEach((p, k) => {
+    for (let k = 0; k < group.length; k++) {
+      const p = group[k]
       const x = paired ? 0 : (k % 2) * W
       const y = paired ? k * H : Math.floor(k / 2) * H
-      if (p.pass && art[p.pass]) drawPass(p, photos[start + k], x, y)
+      if (p.pass === 'swimmer' && art.swimmer) await drawSwimmerTag(p, photos[start + k], x, y)
+      else if (p.pass && art[p.pass]) drawPass(p, photos[start + k], x, y)
       else drawClassic(p, photos[start + k], x, y)
       // Personal QR (swimmers): opens their races, heats, lanes and results.
       if (p.qr && qrcode) {
         drawQR(doc, qrcode, p.qr, x + W - 23, y + 5, 18)
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(4.5); doc.setTextColor(120, 124, 150)
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(4.5)
+        if (p.pass === 'swimmer' && art.swimmer) doc.setTextColor(255, 255, 255); else doc.setTextColor(120, 124, 150)
         doc.text('MY RACES', x + W - 14, y + 25.2, { align: 'center' })
       }
       const b = paired && art[p.pass]?.back
       if (b) doc.addImage(b, 'JPEG', W, y, W, H, `back-${p.pass}`, 'FAST')
-    })
+    }
     guides()
   }
   return doc
