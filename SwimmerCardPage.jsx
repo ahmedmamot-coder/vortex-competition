@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import logoH from './logo-competition.svg'
 import { supabase } from './supabase.js'
+import { speechForHeat } from './lib.js'
 
 // Public page opened from the QR code on a swimmer's pass: the swimmer's events,
 // heats and lanes from this system, and a link to their results on the VIC results site.
@@ -32,6 +33,8 @@ export default function SwimmerCardPage() {
   const heats = d?.heats || []
   const entries = d?.entries || []
   const live = heats.filter((h) => !h.scratched && h.stage >= 1 && h.stage <= 3)
+  const liveKey = live.map((h) => `${h.event_no}-${h.heat}-${h.stage}`).join('|')
+  useEffect(() => { live.forEach((h) => speakCall({ event_no: h.event_no, event: h.event, heat: h.heat, stage: h.stage })) }, [liveKey]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="vx-page">
       <header style={{ borderBottom: '1px solid var(--line)' }}>
@@ -111,6 +114,36 @@ export default function SwimmerCardPage() {
   )
 }
 
+// ---- Voice: read the call out loud like the spectator TV (English, then Arabic) ----
+let voiceOn = false
+const spoken = new Set()
+function pickVoice(lang) {
+  const vs = window.speechSynthesis?.getVoices() || []
+  return vs.find((v) => v.lang?.toLowerCase().startsWith(lang)) || null
+}
+function sayText(text, lang) {
+  return new Promise((done) => {
+    try {
+      const u = new SpeechSynthesisUtterance(text)
+      u.lang = lang === 'ar' ? 'ar-SA' : 'en-GB'
+      const v = pickVoice(lang); if (v) u.voice = v
+      u.rate = 0.95; u.onend = done; u.onerror = done
+      window.speechSynthesis.speak(u)
+      setTimeout(done, 15000)
+    } catch { done() }
+  })
+}
+export async function speakCall(c) {
+  if (!voiceOn || !window.speechSynthesis || !c?.stage) return
+  const key = `${c.event_no}-${c.heat}-${c.stage}`
+  if (spoken.has(key)) return
+  spoken.add(key)
+  const t = speechForHeat({ event_no: c.event_no, event_name: c.event || '', heat_no: c.heat }, c.stage)
+  if (!t) return
+  await sayText(t.en, 'en')
+  if (pickVoice('ar')) await sayText(t.ar, 'ar')
+}
+
 // ---- Call Room phone alerts ----
 function b64ToBytes(b64) {
   const s = (b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')
@@ -126,10 +159,17 @@ function Alerts({ swimmerId, name }) {
   const [msg, setMsg] = useState('')
   const key = `vc-alerts-${swimmerId}`
   const [flash, setFlash] = useState(null) // call received while this page is open
+  const [voice, setVoice] = useState(false)
+  function toggleVoice() {
+    const v = !voice
+    voiceOn = v; setVoice(v)
+    if (v && window.speechSynthesis) { window.speechSynthesis.cancel(); sayText('Voice calls are on.', 'en') } // a tap unlocks speech on phones
+    else window.speechSynthesis?.cancel()
+  }
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
-    const on = (ev) => { if (ev.data?.type === 'vc-call') { setFlash(ev.data); try { navigator.vibrate?.([400, 150, 400]) } catch { /* not on iPhone */ } } }
+    const on = (ev) => { if (ev.data?.type === 'vc-call') { setFlash(ev.data); speakCall(ev.data); try { navigator.vibrate?.([400, 150, 400]) } catch { /* not on iPhone */ } } }
     navigator.serviceWorker.addEventListener('message', on)
     try { navigator.serviceWorker.startMessages() } catch { /* older browsers */ }
     return () => navigator.serviceWorker.removeEventListener('message', on)
@@ -202,6 +242,12 @@ function Alerts({ swimmerId, name }) {
         </>
       )}
       {msg && <div className="small muted">{msg}</div>}
+      {'speechSynthesis' in window && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderTop: '1px solid #dfe2fb', paddingTop: 8 }}>
+          <button type="button" className={`btn sm ${voice ? 'dark' : ''}`} onClick={toggleVoice}>{voice ? '🔊 Voice calls on' : '🔈 Turn on voice calls'}</button>
+          <span className="small muted">{voice ? 'Keep this screen open: each call is read out loud in English and Arabic, like the venue screen.' : 'Read each call out loud on this screen, like the venue screen (keep the page open).'}</span>
+        </div>
+      )}
       {flash && (
         <div role="alert" onClick={() => setFlash(null)} style={{ background: flash.stage === 3 ? '#b4461a' : '#1f23c9', color: '#fff', borderRadius: 12, padding: '12px 14px', cursor: 'pointer' }}>
           <div style={{ fontWeight: 900 }}>{flash.title}</div>
