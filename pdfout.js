@@ -76,7 +76,7 @@ function photoOrPlaceholder(doc, photo, name, x, y, w, h) {
 // ---- Swimmer bag tag (marketing design "Swimmer Bag Tags | International 26") ----
 // Measured from the artwork on a 105 x 148.5 mm card: the white photo circle, and the
 // gap between the circle and the thin line above "SWIMMER. Obviously."
-const TAG = { cx: 52.55, cy: 48.57, r: 23.45, textX: 9.0, textW: 87, textTop: 73.2, textH: 9.9 }
+const TAG = { cx: 52.5, cy: 48.6, r: 24.05, ring: 24.1, textX: 9.0, textW: 87, textTop: 73.2, textH: 9.9 }
 const TAG_BLUE = '#057EE9', TAG_INK = '#0A0A14'
 const PX = 12 // canvas pixels per mm (≈ 300 dpi)
 
@@ -111,25 +111,35 @@ async function tagCircle(photo, name) {
   ctx.beginPath(); ctx.arc(d / 2, d / 2, d / 2, 0, Math.PI * 2); ctx.closePath(); ctx.clip()
   const img = photo ? await loadImage(photo) : null
   if (img) {
-    // Fill the whole circle with the photo (no empty bands), keeping the full head:
-    // 1. ignore plain white padding some photos have around them;
-    // 2. take a square from the top of the photo, centred left-right.
+    // Fill the whole circle with the photo, edge to edge, keeping the full head.
     const iw = img.naturalWidth, ih = img.naturalHeight
     const t = document.createElement('canvas'); t.width = iw; t.height = ih
     const tc = t.getContext('2d', { willReadFrequently: true }); tc.drawImage(img, 0, 0)
     const px = tc.getImageData(0, 0, iw, ih).data
-    const ink = (x, y) => { const i = (y * iw + x) * 4; return px[i] < 246 || px[i + 1] < 246 || px[i + 2] < 246 }
+    const at = (x, y) => { const i = (Math.min(ih - 1, Math.max(0, y)) * iw + Math.min(iw - 1, Math.max(0, x))) * 4; return [px[i], px[i + 1], px[i + 2]] }
+    const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])
+    // 1. Plain white padding around the photo (some uploads have it): skip it.
+    const ink = (x, y) => { const c = at(x, y); return c[0] < 246 || c[1] < 246 || c[2] < 246 }
     let x0 = iw, x1 = -1, y0 = ih, y1 = -1
     for (let y = 0; y < ih; y += 2) for (let x = 0; x < iw; x += 2) if (ink(x, y)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
     if (x1 < 0) { x0 = 0; y0 = 0; x1 = iw - 1; y1 = ih - 1 }
+    // 2. Background colour = the photo's side edges near the top (red wall, white studio…).
+    const bgPts = []
+    for (let f = 0.08; f <= 0.3; f += 0.02) { const y = Math.round(y0 + (y1 - y0) * f); bgPts.push(at(x0 + 3, y), at(x1 - 3, y)) }
+    const bg = [0, 1, 2].map((k) => Math.round(bgPts.reduce((n, c) => n + c[k], 0) / bgPts.length))
+    // 3. Strips across the top that are not the background (a white/grey band): skip them.
+    const offRow = (y) => { let off = 0, n = 0; for (let x = x0; x <= x1; x += 6) { n++; if (dist(at(x, y), bg) > 90) off++ } return off / n > 0.7 }
+    while (y0 < y1 - (y1 - y0) * 0.85 && offRow(y0)) y0 += 1
     const bw = x1 - x0 + 1, bh = y1 - y0 + 1
     const side = Math.min(bw, bh)
     const sx = x0 + (bw - side) / 2
-    // A little space above the hair when the background is white, never past the photo.
-    const padded = x0 > iw * 0.02 || x1 < iw * 0.98 // photo sits inside white padding
-    const sy = Math.max(0, Math.min(padded ? y0 : y0 - side * 0.06, ih - side))
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, d, d)
-    ctx.drawImage(img, sx, sy, side, Math.min(side, ih - sy), 0, 0, d, d * Math.min(side, ih - sy) / side)
+    // 4. Light background: a little air above the hair. Coloured background: start at the top.
+    const light = bg[0] > 200 && bg[1] > 200 && bg[2] > 200
+    // (On a light background the space above the photo is filled with that same colour.)
+    const sy = light ? y0 - side * 0.08 : Math.max(0, Math.min(y0, ih - side))
+    const k = d / side
+    ctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`; ctx.fillRect(0, 0, d, d)
+    ctx.drawImage(img, -sx * k, -sy * k, iw * k, ih * k)
   } else {
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, d, d)
     ctx.fillStyle = TAG_BLUE; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
@@ -246,6 +256,8 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
   async function drawSwimmerTag(p, photo, x, y) {
     doc.addImage(art.swimmer.front, 'JPEG', x, y, W, H, 'pass-swimmer', 'FAST')
     doc.addImage(await tagCircle(photo, p.name), 'PNG', x + TAG.cx - TAG.r, y + TAG.cy - TAG.r, TAG.r * 2, TAG.r * 2, undefined, 'FAST')
+    // Redraw the design's thin black ring so the photo edge is clean.
+    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.circle(x + TAG.cx, y + TAG.cy, TAG.ring, 'S')
     doc.addImage(tagText(p.name, String(p.sub || '').split(' · ')[0]), 'PNG', x + TAG.textX, y + TAG.textTop, TAG.textW, TAG.textH, undefined, 'FAST')
   }
 
