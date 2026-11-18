@@ -116,7 +116,7 @@ export default function SwimmerCardPage() {
 
 // ---- Voice: read the call out loud like the spectator TV (English, then Arabic) ----
 let voiceOn = false
-const spoken = new Set()
+const spoken = new Map() // call -> time it was read, so one call is not read twice
 function pickVoice(lang) {
   const vs = window.speechSynthesis?.getVoices() || []
   return vs.find((v) => v.lang?.toLowerCase().startsWith(lang)) || null
@@ -136,8 +136,8 @@ function sayText(text, lang) {
 export async function speakCall(c) {
   if (!voiceOn || !window.speechSynthesis || !c?.stage) return
   const key = `${c.event_no}-${c.heat}-${c.stage}`
-  if (spoken.has(key)) return
-  spoken.add(key)
+  if (Date.now() - (spoken.get(key) || 0) < 20000) return
+  spoken.set(key, Date.now())
   const t = speechForHeat({ event_no: c.event_no, event_name: c.event || '', heat_no: c.heat }, c.stage)
   if (!t) return
   await sayText(t.en, 'en')
@@ -163,9 +163,26 @@ function Alerts({ swimmerId, name }) {
   function toggleVoice() {
     const v = !voice
     voiceOn = v; setVoice(v)
-    if (v && window.speechSynthesis) { window.speechSynthesis.cancel(); sayText('Voice calls are on.', 'en') } // a tap unlocks speech on phones
+    if (v && window.speechSynthesis) sayText('Voice calls are on.', 'en') // a tap unlocks speech on phones
     else window.speechSynthesis?.cancel()
   }
+
+  // While this page is open, check every few seconds for a new call to this swimmer
+  // (works even when the phone does not pass the alert to the page).
+  useEffect(() => {
+    let last = Date.now() - 5000, stop = false
+    const tick = async () => {
+      if (stop || document.hidden) return
+      try {
+        const r = await fetch(PUSH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'last', swimmer_id: swimmerId }) })
+        const j = await r.json()
+        const at = j?.at ? Date.parse(j.at) : 0
+        if (at > last && j.call) { last = at; setFlash(j.call); speakCall(j.call) }
+      } catch { /* offline */ }
+    }
+    const t = setInterval(tick, 4000)
+    return () => { stop = true; clearInterval(t) }
+  }, [swimmerId])
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
