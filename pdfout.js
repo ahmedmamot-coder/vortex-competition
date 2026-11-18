@@ -97,6 +97,8 @@ function drawQR(doc, qrcode, text, x, y, size) {
 }
 
 export async function badgesPdf({ people, meet, designs = {}, backs = false, onProgress }) {
+  // Officials passes say only "Official" — not the person's position (Referee, Timekeeper…).
+  people = people.map((p) => (p.pass === 'officials' ? { ...p, role: 'Official', sub: '' } : p))
   const { jsPDF } = await loadJsPDF()
   const { PASS, PHOTO_SLOT, LAYOUT, photoTemplate } = await import('./passes.js')
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
