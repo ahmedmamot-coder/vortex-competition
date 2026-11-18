@@ -131,6 +131,7 @@ function Alerts({ swimmerId, name }) {
     if (!('serviceWorker' in navigator)) return
     const on = (ev) => { if (ev.data?.type === 'vc-call') { setFlash(ev.data); try { navigator.vibrate?.([400, 150, 400]) } catch { /* not on iPhone */ } } }
     navigator.serviceWorker.addEventListener('message', on)
+    try { navigator.serviceWorker.startMessages() } catch { /* older browsers */ }
     return () => navigator.serviceWorker.removeEventListener('message', on)
   }, [])
 

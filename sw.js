@@ -14,8 +14,14 @@ self.addEventListener('push', (e) => {
     vibrate: d.stage === 3 ? [600, 200, 600, 200, 600, 200, 900] : [400, 150, 400, 150, 700],
   }
   e.waitUntil((async () => {
+    let shown = 'full', err = ''
     try { await self.registration.showNotification(title, opts) }
-    catch { await self.registration.showNotification(title, { body: opts.body, tag }) } // minimal fallback
+    catch (x) {
+      err = String(x && x.message || x); shown = 'minimal'
+      try { await self.registration.showNotification(title, { body: opts.body, tag }) } catch (y) { shown = 'failed'; err += ' | ' + String(y && y.message || y) }
+    }
+    // Delivery receipt, so organizers can see that the phone got the alert.
+    try { await fetch('https://qhrpwiakobgcxfmcoyfg.supabase.co/functions/v1/vc-push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ack', tag: d.tag || '', stage: d.stage || 0, shown, err }) }) } catch { /* offline */ }
     // Also tell any open page, so it can show the call on screen.
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     all.forEach((c) => c.postMessage({ type: 'vc-call', title, body: d.body || '', stage: d.stage || 0 }))
