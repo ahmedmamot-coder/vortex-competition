@@ -8,6 +8,7 @@ import Applications from './Applications.jsx'
 import Setup from './Setup.jsx'
 import Competitions from './Competitions.jsx'
 import People from './People.jsx'
+import VortexPhotos from './VortexPhotos.jsx'
 import { usePeople } from './photos.jsx'
 import { heatCode } from './lib.js'
 
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'officials', label: 'Officials & Positions' },
   { id: 'staff', label: 'Staff Applications' },
   { id: 'people', label: 'People & Photos' },
+  { id: 'vxphotos', label: 'Vortex Parent Photos' },
   { id: 'setup', label: 'Meet Setup' }
 ]
 
@@ -110,6 +112,7 @@ export default function Console() {
             {tab === 'officials' && <Officials data={data} />}
             {tab === 'staff' && <Applications data={data} />}
             {tab === 'people' && <People data={data} people={people} />}
+            {tab === 'vxphotos' && <VortexPhotos />}
             {tab === 'setup' && <Setup data={data} />}
           </>
         )}
