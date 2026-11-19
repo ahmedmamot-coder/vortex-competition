@@ -201,6 +201,69 @@ function tagText(name, club) {
   return c.toDataURL('image/png')
 }
 
+// ---- VIC26 Short Course passes ----
+let vicFontReady
+function loadVicFont() {
+  // The design's lettering is Funnel Display (free on Google Fonts).
+  return (vicFontReady = vicFontReady || (async () => {
+    try {
+      if (!document.querySelector('link[data-vic-font]')) {
+        const l = document.createElement('link')
+        l.rel = 'stylesheet'; l.dataset.vicFont = '1'
+        l.href = 'https://fonts.googleapis.com/css2?family=Funnel+Display:wght@500;700&display=swap'
+        document.head.appendChild(l)
+        await new Promise((ok) => { l.onload = ok; l.onerror = ok; setTimeout(ok, 4000) })
+      }
+      await document.fonts.load("500 48px 'Funnel Display'")
+    } catch { /* falls back to the system sans-serif */ }
+  })())
+}
+const VIC_FONT = "'Funnel Display', 'Helvetica Neue', Arial, sans-serif"
+
+// "Last, First M" (HY-TEK) or "First Middle Last" -> ["FIRST M", "LAST"].
+function nameLines(name) {
+  const n = String(name || '').replace(/\s+/g, ' ').trim()
+  if (n.includes(',')) return [n.split(',').slice(1).join(' ').trim(), n.split(',')[0].trim()].map((t) => t.toUpperCase())
+  const w = n.split(' ')
+  return w.length < 2 ? [n.toUpperCase(), ''] : [w.slice(0, -1).join(' ').toUpperCase(), w[w.length - 1].toUpperCase()]
+}
+
+// The photo cropped to a square that fills the frame edge to edge (head and shoulders:
+// the crop keeps the top of the portrait). No photo: initials on grey.
+async function vicPhoto(photo, name) {
+  const d = 320 // ≈ 320 dpi on the 25.4 mm frame
+  const c = document.createElement('canvas'); c.width = d; c.height = d
+  const ctx = c.getContext('2d')
+  const img = photo ? await loadImage(photo) : null
+  if (img) {
+    const iw = img.naturalWidth, ih = img.naturalHeight, side = Math.min(iw, ih)
+    const sx = (iw - side) / 2, sy = (ih - side) * 0.12
+    ctx.drawImage(img, sx, sy, side, side, 0, 0, d, d)
+  } else {
+    ctx.fillStyle = '#595960'; ctx.fillRect(0, 0, d, d)
+    ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.font = `500 ${Math.round(d * 0.32)}px ${VIC_FONT}`
+    ctx.fillText(initials(displayName(name)) || '', d / 2, d / 2)
+  }
+  return c.toDataURL('image/jpeg', 0.92)
+}
+
+function vicName(name, t, top, h) {
+  const w = Math.round(VIC_SLOT_W * PX), hh = Math.round(h * PX)
+  const c = document.createElement('canvas'); c.width = w; c.height = hh
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'
+  const lines = nameLines(name)
+  let size = t.size * PX
+  const widest = () => Math.max(...lines.map((l) => ctx.measureText(l).width))
+  ctx.font = `500 ${size}px ${VIC_FONT}`
+  while (widest() > w && size > t.size * PX * 0.55) { size -= 0.05 * PX; ctx.font = `500 ${size}px ${VIC_FONT}` }
+  ctx.fillText(lines[0], 0, (t.base1 - top) * PX)
+  if (lines[1]) ctx.fillText(lines[1], 0, (t.base2 - top) * PX)
+  return c.toDataURL('image/png')
+}
+const VIC_SLOT_W = 37.5
+
 // people: [{ name, photoUrl, role, sub, color, id, pass }]
 // designs: { coach: { front, back }, ... } signed URLs of the pass artwork (optional).
 // Holders whose pass has artwork are printed on it; others get the plain Vortex badge.
@@ -228,7 +291,7 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
   // Officials passes say only "Official" — not the person's position (Referee, Timekeeper…).
   people = people.map((p) => (p.pass === 'officials' ? { ...p, role: 'Official', sub: '' } : p))
   const { jsPDF } = await loadJsPDF()
-  const { PASS, PHOTO_SLOT, LAYOUT, photoTemplate } = await import('./passes.js')
+  const { PASS, PHOTO_SLOT, LAYOUT, photoTemplate, VIC_SLOT } = await import('./passes.js')
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const logo = await logoPng()
   const sponsor = meet?.sponsor_banner || null
@@ -241,13 +304,13 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
     const d = designs[kind]
     art[kind] = {
       // The swimmer bag tag is printed exactly as designed (photo goes in its circle).
-      front: kind === 'swimmer' ? await urlToDataUrl(d.front, 1400) : PASS[kind]?.photo ? await photoTemplate(d.front) : await urlToDataUrl(d.front, 1240),
+      front: PASS[kind]?.vic ? await urlToDataUrl(d.front, 1240) : kind === 'swimmer' ? await urlToDataUrl(d.front, 1400) : PASS[kind]?.photo ? await photoTemplate(d.front) : await urlToDataUrl(d.front, 1240),
       back: d.back ? await urlToDataUrl(d.back, 1240) : null
     }
   }
-  const qrcode = people.some((p) => p.qr) ? await loadQR() : null
-  if (people.some((p) => p.pass === 'swimmer' && art.swimmer)) await loadTagFont()
-  const tagGeo = art.swimmer ? await measureTag(art.swimmer.front) : TAG
+  const vic = (p) => !!(p.pass && PASS[p.pass]?.vic && art[p.pass])
+  const qrcode = people.some((p) => p.qr && !vic(p)) ? await loadQR() : null
+  if (people.some(vic)) await loadVicFont()
   const needPhoto = people.map((p) => !p.pass || !art[p.pass] || PASS[p.pass]?.photo)
   const photos = await loadPhotos(people.map((p, i) => (needPhoto[i] ? p : { ...p, photoUrl: null })), onProgress)
 
@@ -284,11 +347,22 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
     }
   }
 
-  async function drawSwimmerTag(p, photo, x, y) {
-    doc.addImage(art.swimmer.front, 'JPEG', x, y, W, H, 'pass-swimmer', 'FAST')
-    const g = tagGeo
-    doc.addImage(await tagCircle(photo, p.name, g.r), 'PNG', x + g.cx - g.r, y + g.cy - g.r, g.r * 2, g.r * 2, undefined, 'FAST')
-    doc.addImage(tagText(p.name, String(p.sub || '').split(' · ')[0]), 'PNG', x + g.textX, y + g.textTop, g.textW, g.textH, undefined, 'FAST')
+  // VIC26 Swimmer / Coach pass: photo fills the square frame exactly; first name and
+  // last name on two lines beside it, as on the design.
+  async function drawVic(p, photo, x, y) {
+    doc.addImage(art[p.pass].front, 'JPEG', x, y, W, H, `pass-${p.pass}`, 'FAST')
+    const s = VIC_SLOT.photo
+    // Cover the design's sample (grey figure and "NAME / LAST NAME") — the card is black there.
+    doc.setFillColor(0, 0, 0); doc.rect(x + 47.5, y + 89.8, 41.8, 13.2, 'F')
+    const bleed = 0.25
+    if (photo || p.name) doc.addImage(await vicPhoto(photo, p.name), 'JPEG', x + s.x - bleed, y + s.y - bleed, s.size + bleed * 2, s.size + bleed * 2, undefined, 'FAST')
+    else { doc.rect(x + s.x - bleed, y + s.y - bleed, s.size + bleed * 2, s.size + bleed * 2, 'F') }
+    if (p.name) {
+      const t = VIC_SLOT[p.pass] || VIC_SLOT.swimmer
+      const top = t.base1 - t.size * 1.05
+      const h = t.base2 + t.size * 0.35 - top
+      doc.addImage(vicName(p.name, t, top, h), 'PNG', x + VIC_SLOT.textX, y + top, VIC_SLOT.textMaxW, h, undefined, 'FAST')
+    }
   }
 
   function drawClassic(p, photo, x, y) {
@@ -328,14 +402,14 @@ export async function badgesPdf({ people, meet, designs = {}, backs = false, onP
       const p = group[k]
       const x = paired ? 0 : (k % 2) * W
       const y = paired ? k * H : Math.floor(k / 2) * H
-      if (p.pass === 'swimmer' && art.swimmer) await drawSwimmerTag(p, photos[start + k], x, y)
+      if (vic(p)) await drawVic(p, photos[start + k], x, y)
       else if (p.pass && art[p.pass]) drawPass(p, photos[start + k], x, y)
       else drawClassic(p, photos[start + k], x, y)
       // Personal QR (swimmers): opens their races, heats, lanes and results.
-      if (p.qr && qrcode) {
+      if (p.qr && qrcode && !vic(p)) { // the VIC26 passes carry their own printed QR on the back
         drawQR(doc, qrcode, p.qr, x + W - 23, y + 5, 18)
         doc.setFont('helvetica', 'bold'); doc.setFontSize(4.5)
-        if (p.pass === 'swimmer' && art.swimmer) doc.setTextColor(255, 255, 255); else doc.setTextColor(120, 124, 150)
+        doc.setTextColor(120, 124, 150)
         doc.text('MY RACES', x + W - 14, y + 25.2, { align: 'center' })
       }
       const b = paired && art[p.pass]?.back

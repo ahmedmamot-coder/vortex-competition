@@ -7,13 +7,23 @@ import { BUCKET } from './photos.jsx'
 export const PASS_TYPES = [
   { id: 'vvip', label: 'VVIP', photo: false, accent: '#F2A541' },
   { id: 'vip', label: 'VIP', photo: false, accent: '#F2A541' },
-  { id: 'coach', label: 'Coaches', one: 'Coach', photo: false, accent: '#6F8CFF' },
+  { id: 'coach', label: 'Coaches', one: 'Coach', photo: true, vic: true, accent: '#6F8CFF' },
   { id: 'media', label: 'Media', photo: false, accent: '#6F8CFF' },
   { id: 'organizer', label: 'Organizers', one: 'Organizer', photo: false, accent: '#6F8CFF' },
   { id: 'officials', label: 'Officials (judges)', one: 'Official', photo: false, accent: '#6F8CFF' },
-  { id: 'swimmer', label: 'Swimmers', one: 'Swimmer', photo: true, accent: '#6F8CFF' }
+  { id: 'swimmer', label: 'Swimmers', one: 'Swimmer', photo: true, vic: true, accent: '#6F8CFF' }
 ]
 export const PASS = Object.fromEntries(PASS_TYPES.map((p) => [p.id, p]))
+
+// VIC26 Short Course Swimmer and Coach passes (uploaded under Pass designs; the back
+// carries the printed QR code). Measured on the design (mm on the 105 x 148.5 mm card): the square photo frame and
+// the two name lines (first name, then last name) in Funnel Display Medium, white, capitals.
+export const VIC_SLOT = {
+  photo: { x: 18.694, y: 83.937, size: 25.4 },
+  textX: 48.951, textMaxW: 37.5,
+  swimmer: { size: 4.352, base1: 95.595, base2: 100.717 },
+  coach: { size: 4.794, base1: 95.456, base2: 101.100 }
+}
 
 // Staff positions get a pass by their group unless an organizer picks another one.
 export function passForPosition(pos) {

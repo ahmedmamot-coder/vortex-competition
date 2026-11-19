@@ -23,6 +23,7 @@ export default function ClubPortal() {
   const [authorised, setAuthorised] = useState(false)
   const [q, setQ] = useState('')
   const [photos, setPhotos] = useState({})
+  const [coachPhotos, setCoachPhotos] = useState({})
 
   const load = useCallback(async () => {
     if (key.length < 24) { setStatus('badkey'); return }
@@ -31,7 +32,7 @@ export default function ClubPortal() {
     if (!d) { setStatus('badkey'); return }
     setData(d); setStatus('ok')
     // Show the uploaded photos on each swimmer's card (short-lived private links).
-    supabase.functions.invoke('vc-club-photos', { body: { key } }).then(({ data: p }) => { if (p?.photos) setPhotos(p.photos) })
+    supabase.functions.invoke('vc-club-photos', { body: { key } }).then(({ data: p }) => { if (p?.photos) setPhotos(p.photos); if (p?.coaches) setCoachPhotos(p.coaches) })
   }, [key])
   useEffect(() => { load() }, [load])
 
@@ -99,6 +100,8 @@ export default function ClubPortal() {
                 <span>I am the club’s coach or team manager and the swimmers’ parents or guardians have approved these photos for the accreditation pass, the officials’ heat sheets, the results site and Vortex event media.</span>
               </label>
             </div>
+
+            <Coaches k={key} coaches={data.coaches || []} photos={coachPhotos} enabled={authorised} onChanged={load} />
 
             <AddSwimmer k={key} enabled={authorised} onAdded={load} />
 
@@ -286,6 +289,124 @@ function ClubLogo({ k, logo, name, onSaved }) {
       <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={pick} style={{ display: 'none' }} />
       {logo && <button type="button" className="btn sm ghost-light" style={{ minHeight: 26, fontSize: 11.5 }} disabled={busy} onClick={() => ref.current?.click()}>{busy ? 'Uploading…' : 'Replace logo'}</button>}
       {err && <span className="small" style={{ color: '#ffd1cc', maxWidth: 160, textAlign: 'center' }}>{err}</span>}
+    </div>
+  )
+}
+
+// Coaches of this club: name + photo for the VIC26 Coach pass.
+function Coaches({ k, coaches, photos, enabled, onChanged }) {
+  const [name, setName] = useState('')
+  const [photo, setPhoto] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const fileRef = useRef(null)
+
+  async function pick(e) {
+    const f = e.target.files?.[0]; e.target.value = ''
+    if (!f) return
+    try { setPhoto(await processPhoto(f)); setErr('') } catch (x) { setErr(x.message) }
+  }
+  async function add(e) {
+    e.preventDefault()
+    if (!enabled) return setErr('Tick the confirmation box above first.')
+    if (name.trim().split(/\s+/).length < 2) return setErr('Enter the coach’s first and last name.')
+    if (!photo) return setErr('Add the coach’s photo.')
+    setBusy(true); setErr('')
+    try {
+      const path = await uploadPhoto('coaches', photo.blob)
+      const { error } = await supabase.rpc('vc_club_save_coach', { p_key: k, p_id: null, p_name: name, p_path: path })
+      if (error) throw new Error(/too many/.test(error.message) ? 'A club can add up to 15 coaches.' : 'The coach could not be saved. Please try again.')
+      setName(''); setPhoto(null); onChanged()
+    } catch (x) { setErr(x.message) }
+    setBusy(false)
+  }
+
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div>
+        <div style={{ fontWeight: 800, color: 'var(--navy)', fontSize: 17 }}>Coaches</div>
+        <div className="small muted">Each coach gets a Coach pass with their name and photo. Use a clear head-and-shoulders photo, facing the camera.</div>
+      </div>
+      {coaches.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+          {coaches.map((c) => <CoachCard key={c.id} c={c} photo={photos[c.id]} k={k} enabled={enabled} onChanged={onChanged} />)}
+        </div>
+      )}
+      <form onSubmit={add} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => fileRef.current?.click()} disabled={!enabled}
+          style={{ width: 72, height: 96, borderRadius: 10, border: '2px dashed #c9cdf5', background: '#f5f6ff', padding: 0, overflow: 'hidden', flex: 'none', cursor: enabled ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {photo ? <img src={photo.preview} alt="Selected photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 11.5, fontWeight: 700, color: '#1f23c9', textAlign: 'center', padding: 6 }}>Add photo</span>}
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" onChange={pick} style={{ display: 'none' }} />
+        <input className="input" style={{ flex: 1, minWidth: 220 }} placeholder="Coach first and last name" value={name} onChange={(e) => setName(e.target.value)} aria-label="Coach name" disabled={!enabled} />
+        <button className="btn sm primary" disabled={busy || !enabled}>{busy ? 'Saving…' : 'Add coach'}</button>
+      </form>
+      {err && <span className="err-text">{err}</span>}
+    </div>
+  )
+}
+
+function CoachCard({ c, photo, k, enabled, onChanged }) {
+  const [preview, setPreview] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [newName, setNewName] = useState(c.name)
+  const fileRef = useRef(null)
+
+  async function pick(e) {
+    const f = e.target.files?.[0]; e.target.value = ''
+    if (!f) return
+    setBusy(true); setErr('')
+    try {
+      const { blob, preview: pv } = await processPhoto(f)
+      const path = await uploadPhoto('coaches', blob)
+      const { error } = await supabase.rpc('vc_club_save_coach', { p_key: k, p_id: c.id, p_name: c.name, p_path: path })
+      if (error) throw new Error('The photo could not be saved. Please try again.')
+      setPreview(pv); onChanged()
+    } catch (x) { setErr(x.message) }
+    setBusy(false)
+  }
+  async function rename(e) {
+    e.preventDefault()
+    if (newName.trim().split(/\s+/).length < 2) return setErr('Enter the first and last name.')
+    setBusy(true)
+    const { error } = await supabase.rpc('vc_club_save_coach', { p_key: k, p_id: c.id, p_name: newName, p_path: null })
+    setBusy(false)
+    if (error) return setErr('Could not save the name. Please try again.')
+    setEditing(false); onChanged()
+  }
+  async function remove() {
+    if (!window.confirm(`Remove ${c.name} from your coaches?`)) return
+    setBusy(true)
+    const { error } = await supabase.rpc('vc_club_remove_coach', { p_key: k, p_id: c.id })
+    setBusy(false)
+    if (error) return setErr('Could not remove. Please try again.')
+    onChanged()
+  }
+
+  return (
+    <div style={{ border: `1.5px solid ${c.has_photo ? '#bfe3d3' : 'var(--line)'}`, borderRadius: 14, padding: 10, display: 'flex', gap: 10, background: '#fff' }}>
+      <button type="button" disabled={!enabled || busy} onClick={() => fileRef.current?.click()} title="Replace photo"
+        style={{ width: 60, height: 80, borderRadius: 10, border: `2px dashed ${c.has_photo ? '#0e7c66' : '#c9cdf5'}`, background: '#f5f6ff', padding: 0, overflow: 'hidden', flex: 'none', cursor: enabled ? 'pointer' : 'not-allowed' }}>
+        {preview || photo ? <img src={preview || photo} alt={`Photo of ${c.name}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: 11, fontWeight: 700, color: '#1f23c9' }}>{c.has_photo ? 'Photo ✓' : 'Add photo'}</span>}
+      </button>
+      <input ref={fileRef} type="file" accept="image/*" onChange={pick} style={{ display: 'none' }} />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {editing ? (
+          <form onSubmit={rename} style={{ display: 'flex', gap: 6 }}>
+            <input className="input" value={newName} onChange={(e) => setNewName(e.target.value)} style={{ minHeight: 34, fontSize: 13 }} aria-label="Coach name" />
+            <button className="btn sm primary" disabled={busy}>Save</button>
+          </form>
+        ) : <div style={{ fontWeight: 800, color: 'var(--navy)' }}>{c.name}</div>}
+        <div className="small muted">Coach pass</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button type="button" className="btn sm" disabled={!enabled || busy} onClick={() => fileRef.current?.click()}>{busy ? 'Saving…' : 'Replace photo'}</button>
+          {!editing && <button type="button" className="btn sm" disabled={!enabled || busy} onClick={() => { setNewName(c.name); setEditing(true) }}>Edit name</button>}
+          <button type="button" className="btn sm" disabled={!enabled || busy} onClick={remove}>Remove</button>
+        </div>
+        {err && <span className="err-text">{err}</span>}
+      </div>
     </div>
   )
 }
