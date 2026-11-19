@@ -42,6 +42,7 @@ export default function ParentPhotos() {
   async function submit(e) {
     e.preventDefault()
     if (f.swimmer_name.trim().length < 2) return setErr('Please enter the swimmer’s full name.')
+    if (!f.squad) return setErr('Please choose the swimmer’s squad.')
     if (!files.length) return setErr('Please add at least one photo.')
     if (!f.consent) return setErr('Please tick the consent box.')
     setErr('')
@@ -111,9 +112,9 @@ export default function ParentPhotos() {
           <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="field"><label htmlFor="sn">Swimmer full name</label><input id="sn" className="input" value={f.swimmer_name} onChange={(e) => set('swimmer_name', e.target.value)} placeholder="First and last name" /></div>
             <div className="field">
-              <label htmlFor="sq">Squad (optional)</label>
+              <label htmlFor="sq">Squad</label>
               <select id="sq" className="input" value={f.squad} onChange={(e) => set('squad', e.target.value)}>
-                <option value="">Choose…</option>
+                <option value="" disabled>Choose the squad…</option>
                 {SQUADS.map((s) => <option key={s}>{s}</option>)}
               </select>
             </div>
