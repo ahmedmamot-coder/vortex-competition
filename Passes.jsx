@@ -162,6 +162,13 @@ function Designs({ designs, reload }) {
     const files = [...(e.target.files || [])]
     e.target.value = ''
     if (!files.length) return
+    // Safari cannot draw the designs' transparent background pattern from a PDF (it comes out
+    // bright and wrong), so only the ready-made pictures are accepted there.
+    const safari = /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent)
+    if (safari && files.some((f) => /pdf$/i.test(f.name) || f.type === 'application/pdf')) {
+      setMsg('Safari cannot draw these PDF designs correctly (the background comes out wrong). Upload the design pictures instead (for example swimmer-front.jpg, swimmer-back.jpg, coach-front.jpg, coach-back.jpg), or upload the PDF from Chrome.')
+      return
+    }
     setBusy(true); setMsg('Reading the design files…')
     try {
       const all = []
