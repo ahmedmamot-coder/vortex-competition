@@ -7,7 +7,7 @@ import { supabase } from './supabase.js'
 // Media Team. Photos go to their own private folder (vx-parent-photos) and are NOT
 // linked to the competition's swimmer photos.
 const FN = 'https://qhrpwiakobgcxfmcoyfg.supabase.co/functions/v1/vx-upload'
-const SQUADS = ['ADV', 'SNR', 'VTX', 'LGD', 'Academy', 'Other']
+const SQUADS = ['Pre Team', 'ADV A', 'ADV B', 'JNR', 'SNR A', 'SNR B', 'VTX A', 'VTX B']
 const MAX = 3
 
 async function call(body) {
