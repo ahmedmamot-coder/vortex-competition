@@ -82,6 +82,13 @@ export default function ParentPhotos() {
           <p style={{ margin: 0 }}>We are delighted to welcome your club to the Vortex International Championship 26 | Short Course.</p>
           <p style={{ margin: 0 }}>Ahead of the championship, our Media Team is preparing a special “Meet the Teams” series for Vortex Aquatics’ social media platforms. We’d love to introduce your club and swimmers to our community.</p>
           <h2 style={{ fontSize: 18, margin: '8px 0 0' }}>1. Swimmer Details and Photos</h2>
+          <div role="note" style={{ margin: '6px 0 2px', padding: '14px 16px', borderRadius: 12, background: '#FFF4CC', border: '2px solid #F5B400', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span aria-hidden="true" style={{ fontSize: 26, lineHeight: 1 }}>⚠️</span>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#5C3B00', textTransform: 'uppercase', letterSpacing: 0.3 }}>Vortex uniform is a must</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#5C3B00' }}>The swimmer must be wearing the Vortex club uniform in the photo. Photos without the Vortex uniform will not be accepted.</div>
+            </div>
+          </div>
           <h3 style={{ fontSize: 15, margin: '4px 0 0' }}>Photo requirements</h3>
           <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
             <li>A recent, passport-style portrait showing the swimmer’s head and shoulders, facing the camera.</li>
