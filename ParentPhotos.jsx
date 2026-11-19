@@ -78,7 +78,7 @@ export default function ParentPhotos() {
         </div>
 
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, lineHeight: 1.55 }}>
-          <p style={{ margin: 0 }}>Dear Coaches,</p>
+          <p style={{ margin: 0 }}>Dear Parents,</p>
           <p style={{ margin: 0 }}>We are delighted to welcome your club to the Vortex International Championship 26 | Short Course.</p>
           <p style={{ margin: 0 }}>Ahead of the championship, our Media Team is preparing a special “Meet the Teams” series for Vortex Aquatics’ social media platforms. We’d love to introduce your club and swimmers to our community.</p>
           <h2 style={{ fontSize: 18, margin: '8px 0 0' }}>1. Swimmer Details and Photos</h2>
