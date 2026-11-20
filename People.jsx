@@ -45,6 +45,9 @@ export default function People({ data, people }) {
       // Individual entries: swims on the heat sheet, or the events imported from the club's entries PDF.
       c.entries = c.names.size ? c.swims : c.reg.reduce((n, x) => n + (Array.isArray(x.entries) ? x.entries.length : 0), 0)
       c.photos = c.names.size ? c.withPhoto.size : c.reg.filter((x) => x.photo_path).length
+      // Boys / girls, from the registered swimmers (gender comes from the entries).
+      c.male = c.reg.filter((x) => /^m/i.test(x.gender || '')).length
+      c.female = c.reg.filter((x) => /^f/i.test(x.gender || '')).length
     })
     return Object.values(m).sort((a, b) => b.total - a.total || a.code.localeCompare(b.code))
   }, [entries, people, clubs, swimmers])
@@ -425,7 +428,7 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
                     {row?.coach_name ? <div className="small muted" style={{ marginTop: 4 }}>{row.coach_name} · {String(row.coach_mobile || '').startsWith('+') ? row.coach_mobile : `+974 ${row.coach_mobile}`}{row.coach_email ? ` · ${row.coach_email}` : ''}</div>
                       : row && c.total > 0 ? <div className="small muted" style={{ marginTop: 4 }}>Registered from entries · coach has not opened the club page yet</div> : null}
                   </td>
-                  <td className="num">{c.total}{!c.names.size && c.total ? <div className="small muted">registered</div> : null}</td>
+                  <td className="num">{c.total}{!c.names.size && c.total ? <div className="small muted">registered</div> : null}{c.male + c.female > 0 && <div className="small muted" style={{ whiteSpace: 'nowrap' }}>{c.male} M · {c.female} F</div>}</td>
                   <td className="num">{c.entries || '—'}</td>
                   <td style={{ minWidth: 120 }}>
                     <div className="small" style={{ fontWeight: 700 }}>{c.photos} / {c.total}</div>
@@ -446,13 +449,13 @@ function ClubsTable({ clubStats, clubs, meet, reload, busy, onBadges }) {
             })}
           </tbody>
           {clubStats.length > 0 && (() => {
-            const t = clubStats.reduce((a, c) => ({ swimmers: a.swimmers + c.total, entries: a.entries + (c.entries || 0), photos: a.photos + c.photos }), { swimmers: 0, entries: 0, photos: 0 })
+            const t = clubStats.reduce((a, c) => ({ swimmers: a.swimmers + c.total, entries: a.entries + (c.entries || 0), photos: a.photos + c.photos, male: a.male + c.male, female: a.female + c.female }), { swimmers: 0, entries: 0, photos: 0, male: 0, female: 0 })
             const pct = t.swimmers ? Math.round((t.photos / t.swimmers) * 100) : 0
             return (
               <tfoot>
                 <tr style={{ fontWeight: 800, borderTop: '2px solid var(--navy)', background: 'var(--soft-2)' }}>
                   <td colSpan={3}>Total · {clubStats.length} {clubStats.length === 1 ? 'club' : 'clubs'}</td>
-                  <td className="num">{t.swimmers}</td>
+                  <td className="num">{t.swimmers}<div className="small" style={{ whiteSpace: 'nowrap', fontWeight: 700 }}>{t.male} male · {t.female} female</div>{t.swimmers - t.male - t.female > 0 && <div className="small muted" style={{ whiteSpace: 'nowrap' }}>{t.swimmers - t.male - t.female} not set</div>}</td>
                   <td className="num">{t.entries}</td>
                   <td style={{ minWidth: 120 }}>
                     <div className="small" style={{ fontWeight: 800 }}>{t.photos} / {t.swimmers}</div>
