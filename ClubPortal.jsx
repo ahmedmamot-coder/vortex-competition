@@ -44,9 +44,9 @@ export default function ClubPortal() {
     const out = (data.swimmers || []).map((s) => {
       const r = reg.find((x) => !used.has(x.id) && (x.entry_name === s.name || x.name === s.name)) || reg.find((x) => !used.has(x.id) && sameName(x.name, s.name))
       if (r) used.add(r.id)
-      return { key: `h-${s.name}`, entryName: s.name, name: s.name, regName: r?.name, id: r?.id || null, events: s.events, has_photo: !!r?.has_photo, photo: r ? photos[r.id] : null, marketing: !!r?.marketing, onHeatSheet: true }
+      return { key: `h-${s.name}`, entryName: s.name, name: s.name, regName: r?.name, id: r?.id || null, gender: r?.gender || null, events: s.events, has_photo: !!r?.has_photo, photo: r ? photos[r.id] : null, marketing: !!r?.marketing, onHeatSheet: true }
     })
-    reg.filter((r) => !used.has(r.id)).forEach((r) => out.push({ key: `r-${r.id}`, name: r.name, id: r.id, events: r.entries || [], imported: !!r.entries, age: r.age, has_photo: r.has_photo, photo: photos[r.id] || null, marketing: r.marketing, birth_year: r.birth_year, onHeatSheet: false }))
+    reg.filter((r) => !used.has(r.id)).forEach((r) => out.push({ key: `r-${r.id}`, name: r.name, id: r.id, gender: r.gender || null, events: r.entries || [], imported: !!r.entries, age: r.age, has_photo: r.has_photo, photo: photos[r.id] || null, marketing: r.marketing, birth_year: r.birth_year, onHeatSheet: false }))
     return out.sort((a, b) => a.name.localeCompare(b.name))
   }, [data, photos])
 
@@ -127,6 +127,7 @@ export default function ClubPortal() {
 function AddSwimmer({ k, enabled, onAdded }) {
   const [name, setName] = useState('')
   const [year, setYear] = useState('')
+  const [gender, setGender] = useState('')
   const [photo, setPhoto] = useState(null)
   const [marketing, setMarketing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -145,13 +146,15 @@ function AddSwimmer({ k, enabled, onAdded }) {
     if (!enabled) return setErr('Tick the confirmation box above first.')
     if (name.trim().split(/\s+/).length < 2) return setErr('Enter the swimmer’s full name exactly as in your entries.')
     if (year && !(+year >= 1940 && +year <= new Date().getFullYear() - 3)) return setErr('Check the year of birth.')
+    if (!gender) return setErr('Choose the swimmer’s gender (M or F).')
     if (!photo) return setErr('Add the swimmer’s photo.')
     setBusy(true); setErr('')
     try {
       const path = await uploadPhoto('swimmers', photo.blob)
-      const { error } = await supabase.rpc('vc_club_save_swimmer', { p_key: k, p_id: null, p_name: name, p_path: path, p_marketing: true, p_birth_year: year ? +year : null })
+      const { data: sid, error } = await supabase.rpc('vc_club_save_swimmer', { p_key: k, p_id: null, p_name: name, p_path: path, p_marketing: true, p_birth_year: year ? +year : null })
       if (error) throw new Error('The swimmer could not be saved. Please try again.')
-      setOk(`${name.trim()} added.`); setName(''); setYear(''); setPhoto(null); setMarketing(false); onAdded()
+      if (sid) await supabase.rpc('vc_club_set_gender', { p_key: k, p_id: sid, p_gender: gender })
+      setOk(`${name.trim()} added.`); setName(''); setYear(''); setGender(''); setPhoto(null); setMarketing(false); onAdded()
     } catch (x) { setErr(x.message) }
     setBusy(false)
   }
@@ -168,6 +171,7 @@ function AddSwimmer({ k, enabled, onAdded }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input className="input" style={{ flex: 2, minWidth: 220 }} placeholder="Name exactly as in HY-TEK / entry sheet" value={name} onChange={(e) => setName(e.target.value)} aria-label="Swimmer name" disabled={!enabled} />
           <input className="input num" style={{ width: 120 }} inputMode="numeric" maxLength={4} placeholder="Birth year" value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, '').slice(0, 4))} aria-label="Year of birth" disabled={!enabled} />
+          <GenderPick value={gender} onChange={setGender} disabled={!enabled} />
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="btn sm primary" disabled={busy || !enabled}>{busy ? 'Saving…' : 'Add swimmer'}</button>
@@ -187,7 +191,16 @@ function SwimmerCard({ s, k, enabled, heatSheet, onChanged }) {
   const [err, setErr] = useState('')
   const [editing, setEditing] = useState(false)
   const [newName, setNewName] = useState(s.name)
+  const [gender, setGender] = useState(s.gender || '')
   const fileRef = useRef(null)
+
+  async function saveGender(g) {
+    if (!s.id || g === gender) return
+    const old = gender
+    setGender(g); setErr('')
+    const { error } = await supabase.rpc('vc_club_set_gender', { p_key: k, p_id: s.id, p_gender: g })
+    if (error) { setGender(old); setErr('Could not save the gender. Please try again.') }
+  }
 
   async function pick(e) {
     const file = e.target.files?.[0]
@@ -241,6 +254,7 @@ function SwimmerCard({ s, k, enabled, heatSheet, onChanged }) {
           </form>
         ) : <div style={{ fontWeight: 800, color: 'var(--navy)' }}>{s.name}</div>}
         {s.regName && s.regName !== s.name && <div className="small muted">Registered as: {s.regName}</div>}
+        {s.id && <GenderPick value={gender} onChange={saveGender} disabled={!enabled} small />}
         {s.events.length ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {s.events.map((e, i) => (
@@ -407,6 +421,22 @@ function CoachCard({ c, photo, k, enabled, onChanged }) {
         </div>
         {err && <span className="err-text">{err}</span>}
       </div>
+    </div>
+  )
+}
+
+// Gender: M / F buttons (required for new swimmers; editable on each swimmer).
+function GenderPick({ value, onChange, disabled, small }) {
+  const btn = (g, label) => (
+    <button type="button" key={g} disabled={disabled} onClick={() => onChange(g)} aria-pressed={value === g}
+      style={{ minWidth: small ? 40 : 48, minHeight: small ? 28 : 44, padding: '0 10px', borderRadius: 8, fontWeight: 800, fontSize: small ? 12.5 : 14,
+        border: `1.5px solid ${value === g ? '#1f23c9' : 'var(--line)'}`, background: value === g ? '#1f23c9' : '#fff', color: value === g ? '#fff' : 'var(--navy)', cursor: disabled ? 'not-allowed' : 'pointer' }}>{label}</button>
+  )
+  return (
+    <div role="group" aria-label="Gender" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      {small && <span className="small muted" style={{ marginRight: 2 }}>Gender</span>}
+      {btn('M', small ? 'M' : 'M – Boy')}{btn('F', small ? 'F' : 'F – Girl')}
+      {small && !value && <span className="small" style={{ color: '#b42318', fontWeight: 700 }}>not set</span>}
     </div>
   )
 }
