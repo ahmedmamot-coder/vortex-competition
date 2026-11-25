@@ -123,6 +123,26 @@ export default function VortexPhotos() {
     } catch (x) { setMsg(x.message) } finally { setBusy('') }
   }
 
+  // Organizers only: replace a swimmer's photo with a new original (approved by the parents).
+  // The new file is stored as-is (full quality); the old file is removed.
+  const [replacing, setReplacing] = useState(null)
+  async function replace(r, file) {
+    if (!file) return
+    if (!/^image\//.test(file.type) && !/\.(heic|heif)$/i.test(file.name)) { setMsg('Choose a photo (JPG, PNG or HEIC).'); return }
+    setReplacing(r.id); setMsg('')
+    try {
+      const ext = ((file.name.split('.').pop() || 'jpg').toLowerCase().replace('jpeg', 'jpg').match(/^(jpg|png|heic|heif|webp)$/) || ['jpg'])[0]
+      const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`
+      const { error: e1 } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false })
+      if (e1) throw new Error('The new photo could not be uploaded: ' + e1.message)
+      const { error: e2 } = await supabase.from('vx_photo_uploads').update({ path }).eq('id', r.id)
+      if (e2) { await supabase.storage.from(BUCKET).remove([path]); throw new Error('Could not save: ' + e2.message) }
+      await supabase.storage.from(BUCKET).remove([r.path])
+      setMsg(`Photo replaced for ${r.swimmer_name}.`)
+      await load()
+    } catch (x) { setMsg(x.message) } finally { setReplacing(null) }
+  }
+
   async function remove(r) {
     if (!window.confirm(`Delete the photo for ${r.swimmer_name}? This cannot be undone.`)) return
     const { error: e1 } = await supabase.storage.from(BUCKET).remove([r.path])
@@ -176,8 +196,12 @@ export default function VortexPhotos() {
                 <span className="small muted">{[r.squad, r.parent_name].filter(Boolean).join(' · ') || '—'}</span>
                 {r.parent_mobile && <span className="small muted">{r.parent_mobile}</span>}
                 <span className="small muted">{new Date(r.created_at).toLocaleDateString()} {mb(sizes[r.path])}</span>
-                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
                   <button className="btn sm" onClick={() => downloadOne(r)}>Original</button>
+                  <label className="btn sm" style={{ cursor: 'pointer' }} title="Replace with a new photo">
+                    {replacing === r.id ? 'Saving…' : 'Replace'}
+                    <input type="file" accept="image/*,.heic,.heif" style={{ display: 'none' }} disabled={replacing === r.id} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; replace(r, f) }} />
+                  </label>
                   <button className="btn sm" onClick={() => remove(r)}>Delete</button>
                 </div>
               </div>
